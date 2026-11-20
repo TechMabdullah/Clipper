@@ -1,0 +1,20 @@
+{
+  "name": "clipper-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "nx run-many -t serve -p web,api-gateway,notification-service",
+    "build": "nx run-many -t build",
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test"
+  },
+  "devDependencies": {
+    "@nx/eslint": "^20.0.0",
+    "@nx/js": "^20.0.0",
+    "@nx/next": "^20.0.0",
+    "@nx/node": "^20.0.0",
+    "nx": "^20.0.0",
+    "typescript": "^5.5.0"
+  }
+}

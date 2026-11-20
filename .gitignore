@@ -1,0 +1,11 @@
+data/*.sqlite*
+models/*.bin
+.env
+.env.local
+.env.*.local
+.nx/cache
+dist/
+apps/web/.next/
+node_modules/
+*.log
+ecosystem.config.js
