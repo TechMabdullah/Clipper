@@ -99,14 +99,23 @@
       <div class="card">
         <div class="card-title">Live Stream Configuration</div>
         <div class="form-row">
-          <select id="livePlatform" style="width: 140px;">
+          <select id="livePlatform" style="width: 130px;">
             <option value="twitch" selected>Twitch</option>
             <option value="youtube">YouTube</option>
           </select>
-          <input type="text" id="liveChannel" placeholder="e.g. caseoh_ or https://youtube.com/live/..." style="flex: 1;">
-          <select id="liveFormat" style="width: 160px;">
-            <option value="true" selected>9:16 Vertical (Shorts)</option>
-            <option value="false">16:9 Landscape</option>
+          <input type="text" id="liveChannel" placeholder="e.g. caseoh_ or https://youtube.com/live/..." style="flex: 1; min-width: 200px;">
+          <select id="liveLayout" style="width: 230px;" onchange="toggleFacecamPos(this.value)">
+            <option value="split" selected>📱 Split: Facecam + Game (9:16)</option>
+            <option value="crop">📱 9:16 Center Crop</option>
+            <option value="blur">📱 9:16 Blurred Background</option>
+            <option value="landscape">🖥️ 16:9 Landscape</option>
+          </select>
+          <select id="liveFacecamPos" style="width: 200px;">
+            <option value="auto" selected>👤 Facecam: Auto-Detect</option>
+            <option value="bottom-left">↙️ Facecam: Bottom-Left</option>
+            <option value="top-left">↖️ Facecam: Top-Left</option>
+            <option value="bottom-right">↘️ Facecam: Bottom-Right</option>
+            <option value="top-right">↗️ Facecam: Top-Right</option>
           </select>
           <button id="btnStartLive" class="btn" onclick="startLive()">Start Monitor</button>
           <button id="btnStopLive" class="btn btn-secondary" onclick="stopLive()" style="display:none;">Stop Monitor</button>
@@ -235,22 +244,29 @@
     }
 
     // ── Live Stream Functions ─────────────────────────────────────────────
+    function toggleFacecamPos(layout) {
+      const posSelect = document.getElementById('liveFacecamPos');
+      posSelect.style.display = (layout === 'split') ? 'inline-block' : 'none';
+    }
+
     async function startLive() {
       const platform = document.getElementById('livePlatform').value;
       const channelOrUrl = document.getElementById('liveChannel').value.trim();
-      const vertical = document.getElementById('liveFormat').value === 'true';
+      const layout = document.getElementById('liveLayout').value;
+      const facecamPosition = document.getElementById('liveFacecamPos').value;
+      const vertical = layout !== 'landscape';
 
       if (!channelOrUrl) return alert('Please enter a channel name or stream URL');
 
       const res = await fetch('/api/live/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, channelOrUrl, vertical })
+        body: JSON.stringify({ platform, channelOrUrl, vertical, layout, facecamPosition })
       });
       const data = await res.json();
       if (data.ok) {
         showToast('Live monitor started!');
-        updateLiveUI(true, platform, channelOrUrl);
+        updateLiveUI(true, platform, channelOrUrl, layout, facecamPosition);
       } else {
         alert(data.error || 'Failed to start');
       }
@@ -265,21 +281,25 @@
 
     async function triggerManualClip() {
       showToast('Extracting last 20 seconds...');
-      const res = await fetch('/api/live/clip-now', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ durationSec: 20 })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        showToast('✅ Clip saved: ' + data.clip.filePath);
-        loadClips();
-      } else {
-        alert(data.error || 'Failed to clip');
+      try {
+        const res = await fetch('/api/live/clip-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ durationSec: 20 })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast('✅ Clip saved: ' + data.clip.filePath);
+          loadClips();
+        } else {
+          alert(data.error || 'Failed to clip');
+        }
+      } catch (e) {
+        alert(e.message || 'Error communicating with server');
       }
     }
 
-    function updateLiveUI(active, platform = '', target = '') {
+    function updateLiveUI(active, platform = '', target = '', layout = 'split', facecam = 'auto') {
       const statusEl = document.getElementById('monitorStatus');
       const targetEl = document.getElementById('monitorTarget');
       const startBtn = document.getElementById('btnStartLive');
@@ -288,7 +308,7 @@
       if (active) {
         statusEl.innerText = '🔴 MONITORING';
         statusEl.style.color = 'var(--red)';
-        targetEl.innerText = `${platform.toUpperCase()}: ${target}`;
+        targetEl.innerText = `${platform.toUpperCase()}: ${target} (${layout}${layout === 'split' ? ' / ' + facecam : ''})`;
         startBtn.style.display = 'none';
         stopBtn.style.display = 'inline-block';
       } else {

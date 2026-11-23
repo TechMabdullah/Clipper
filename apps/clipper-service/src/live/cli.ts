@@ -9,6 +9,8 @@ const args = process.argv.slice(2);
 let platform: LivePlatform = 'twitch';
 let channelOrUrl = '';
 let vertical = true;
+let layout: 'split' | 'crop' | 'blur' | 'landscape' = 'split';
+let facecamPosition: 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right' = 'auto';
 let spikeMultiplier = 2.5;
 let minSpikeThreshold = 4.0;
 
@@ -22,6 +24,12 @@ for (let i = 0; i < args.length; i++) {
     channelOrUrl = args[++i] ?? '';
   } else if (arg === '--landscape' || arg === '--no-vertical' || arg === '--16:9') {
     vertical = false;
+    layout = 'landscape';
+  } else if (arg === '--layout') {
+    layout = (args[++i] as any) ?? 'split';
+    if (layout === 'landscape') vertical = false;
+  } else if (arg === '--facecam') {
+    facecamPosition = (args[++i] as any) ?? 'auto';
   } else if (arg === '--multiplier') {
     spikeMultiplier = parseFloat(args[++i] ?? '2.5');
   } else if (arg === '--min-threshold') {
@@ -42,7 +50,9 @@ Usage:
   pnpm live --youtube <url_or_id>    (e.g. pnpm live --youtube https://youtube.com/live/...)
 
 Options:
-  --landscape                        Save 16:9 widescreen (default is 9:16 vertical crop)
+  --layout <split|crop|blur|landscape> Default: split (Facecam Top + Game Bottom)
+  --facecam <auto|bottom-left|top-left|bottom-right|top-right> Default: auto
+  --landscape                        Save 16:9 widescreen (same as --layout landscape)
   --multiplier <number>              Spike multiplier vs baseline (default: 2.5)
   --min-threshold <number>           Minimum messages/sec to trigger (default: 4.0)
 
@@ -59,7 +69,8 @@ async function main() {
   console.log('  🎬 CLIPPER STUDIO — LIVE CHAT EXPLOSION DETECTOR');
   console.log('='.repeat(70));
   console.log(`  Target:       ${platform.toUpperCase()} -> ${channelOrUrl}`);
-  console.log(`  Format:       ${vertical ? '9:16 Vertical (Shorts/Reels/TikTok)' : '16:9 Landscape'}`);
+  console.log(`  Layout:       ${layout.toUpperCase()} ${layout === 'split' ? '(Facecam Top + Gameplay Bottom)' : ''}`);
+  console.log(`  Facecam Pos:  ${facecamPosition}`);
   console.log(`  Sensitivity:  ${spikeMultiplier}x baseline (min ${minSpikeThreshold} msg/s)`);
   console.log(`  Clip Window:  10 seconds BEFORE spike  +  10 seconds AFTER spike (20s total)`);
   console.log(`  Clips Saved:  D:/ClipperMedia/03_clips/`);
@@ -70,6 +81,8 @@ async function main() {
     platform,
     channelOrUrl,
     vertical,
+    layout,
+    facecamPosition,
     spikeMultiplier,
     minSpikeThreshold,
   });

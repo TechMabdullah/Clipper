@@ -2,6 +2,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 
+export type ClipLayout = 'split' | 'crop' | 'blur' | 'landscape';
+export type FacecamPosition = 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right';
+
 export interface RecordedSegment {
   file: string;
   seq: number;
@@ -15,6 +18,13 @@ export interface StreamBufferOptions {
   quality?: string;
   /** Keep buffer duration in seconds (default: 240s = 4 minutes) */
   bufferWindowSec?: number;
+}
+
+export interface ExtractClipOptions {
+  title?: string;
+  vertical?: boolean;
+  layout?: ClipLayout;
+  facecamPosition?: FacecamPosition;
 }
 
 export class StreamBuffer {
@@ -52,7 +62,6 @@ export class StreamBuffer {
 
     console.log(`[stream-buffer] Launching streamlink capture for: ${this.channelOrUrl}`);
 
-    // Resolve URL for streamlink
     let targetUrl = this.channelOrUrl;
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       targetUrl = `https://www.twitch.tv/${targetUrl}`;
@@ -90,18 +99,15 @@ export class StreamBuffer {
       stdio: ['pipe', 'ignore', 'pipe'],
     });
 
-    // Pipe streamlink stdout directly into ffmpeg stdin
     this.streamlinkProc.stdout?.pipe(this.ffmpegProc.stdin!);
 
     this.ffmpegProc.stderr?.on('data', (d: Buffer) => {
-      // Keep stderr quiet unless severe
       const str = d.toString();
       if (str.includes('Error') || str.includes('Invalid')) {
         console.warn(`[ffmpeg-buffer] ${str.trim()}`);
       }
     });
 
-    // Handle exits
     this.streamlinkProc.on('close', (code) => {
       console.log(`[stream-buffer] streamlink exited with code ${code}`);
       this.isBuffering = false;
@@ -112,7 +118,6 @@ export class StreamBuffer {
       this.isBuffering = false;
     });
 
-    // Watch buffer directory and index segments
     this.segmentWatcherTimer = setInterval(() => this.indexAndPruneSegments(), 1500);
   }
 
@@ -129,7 +134,6 @@ export class StreamBuffer {
       this.ffmpegProc = null;
     }
 
-    // Clean up temporary buffer folder
     setTimeout(() => {
       try {
         fs.rmSync(this.bufferDir, { recursive: true, force: true });
@@ -138,10 +142,6 @@ export class StreamBuffer {
     }, 5000);
   }
 
-  /**
-   * Scans buffer folder, assigns epoch timestamps to newly written chunks,
-   * and unlinks chunks that are older than bufferWindowSec.
-   */
   private indexAndPruneSegments(): void {
     if (!fs.existsSync(this.bufferDir)) return;
 
@@ -151,7 +151,7 @@ export class StreamBuffer {
         .sort();
 
       const now = Date.now();
-      const SEG_DUR_MS = 2000; // 2s segment time
+      const SEG_DUR_MS = 2000;
 
       for (const f of files) {
         const fullPath = path.join(this.bufferDir, f);
@@ -160,10 +160,8 @@ export class StreamBuffer {
         const seq = parseInt(match[1]!, 10);
 
         if (!this.segments.some(s => s.seq === seq)) {
-          // Check file size > 0 to ensure it has begun writing
           const stat = fs.statSync(fullPath);
           if (stat.size > 0) {
-            // Timestamp is offset from stream start based on seq
             const startEpochMs = this.streamStartEpochMs + (seq * SEG_DUR_MS);
             const endEpochMs = startEpochMs + SEG_DUR_MS;
             this.segments.push({
@@ -176,7 +174,6 @@ export class StreamBuffer {
         }
       }
 
-      // Prune old segments older than bufferWindowSec
       const cutoff = now - (this.bufferWindowSec * 1000);
       while (this.segments.length > 0 && this.segments[0]!.endEpochMs < cutoff) {
         const oldSeg = this.segments.shift()!;
@@ -190,22 +187,55 @@ export class StreamBuffer {
   }
 
   /**
-   * Extracts a clip spanning [startEpochMs, endEpochMs].
-   * Handles segment selection, concat demuxer, precise trim, and vertical crop.
+   * Attempts automatic face detection on a video segment using OpenCV.
+   * Returns detected corner: 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right'.
    */
+  private async detectFaceCorner(sampleSegmentPath: string): Promise<FacecamPosition> {
+    const sampleImg = path.join(this.bufferDir, `detect_${Date.now()}.jpg`);
+    const pyScript = path.resolve('apps/clipper-service/src/live/detect_face.py');
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const p = spawn('ffmpeg', [
+          '-y', '-ss', '0.5', '-i', sampleSegmentPath,
+          '-vframes', '1', '-q:v', '2', sampleImg
+        ], { stdio: 'ignore' });
+        p.on('close', (c) => c === 0 ? resolve() : reject(new Error('frame extract failed')));
+        p.on('error', reject);
+      });
+
+      const out = await new Promise<string>((resolve, reject) => {
+        const p = spawn('python', [pyScript, sampleImg], { stdio: ['ignore', 'pipe', 'ignore'] });
+        let buf = '';
+        p.stdout?.on('data', (d) => buf += d.toString());
+        p.on('close', () => resolve(buf.trim()));
+        p.on('error', reject);
+      });
+
+      try { fs.unlinkSync(sampleImg); } catch {}
+
+      const data = JSON.parse(out);
+      if (data.found && data.corner) {
+        console.log(`[stream-buffer] 👤 Auto Facecam detected in: ${data.corner}`);
+        return data.corner as FacecamPosition;
+      }
+    } catch (err) {
+      console.warn('[stream-buffer] Auto face detection fallback to bottom-left');
+    }
+
+    try { if (fs.existsSync(sampleImg)) fs.unlinkSync(sampleImg); } catch {}
+    return 'bottom-left';
+  }
+
   public async extractClip(
     startEpochMs: number,
     endEpochMs: number,
-    options: {
-      title?: string;
-      vertical?: boolean;
-    } = {}
+    options: ExtractClipOptions = {}
   ): Promise<{ filePath: string; durationSec: number; fileSizeBytes: number }> {
-    const vertical = options.vertical ?? true;
+    const layout: ClipLayout = options.layout ?? (options.vertical === false ? 'landscape' : 'split');
+    let facecamPosition: FacecamPosition = options.facecamPosition ?? 'auto';
     const title = (options.title ?? 'clip').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-    // Find all segments covering this time window
-    // (Include 1 segment padding on each side for clean keyframe boundary)
     const matching = this.segments.filter(s =>
       s.endEpochMs >= (startEpochMs - 2000) && s.startEpochMs <= (endEpochMs + 2000)
     );
@@ -215,7 +245,6 @@ export class StreamBuffer {
     }
 
     const firstSeg = matching[0]!;
-    // Offset in seconds from start of the first segment
     const startOffsetSec = Math.max(0, (startEpochMs - firstSeg.startEpochMs) / 1000);
     const clipDurationSec = Math.max(1, (endEpochMs - startEpochMs) / 1000);
 
@@ -223,17 +252,66 @@ export class StreamBuffer {
     const outFileName = `${title}_${timestampStr}.mp4`;
     const outFilePath = path.join(this.clipsDir, outFileName);
 
-    // Create temporary concat manifest
     const concatFile = path.join(this.bufferDir, `concat_${Date.now()}.txt`);
     const concatContent = matching
       .map(s => `file '${s.file.replace(/\\/g, '/')}'`)
       .join('\n');
     fs.writeFileSync(concatFile, concatContent, 'utf8');
 
-    // Build FFmpeg command
-    const vfArgs = vertical
-      ? ['-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920']
-      : [];
+    // Auto-resolve facecam corner if set to auto
+    if (layout === 'split' && facecamPosition === 'auto') {
+      facecamPosition = await this.detectFaceCorner(firstSeg.file);
+    }
+
+    // Build FFmpeg filter args based on selected layout
+    let filterArgs: string[] = [];
+
+    if (layout === 'split') {
+      // ── Split-Screen Layout: Facecam Top (1080x720) + Gameplay Bottom (1080x1200) ──
+      let camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=0:y=ih*0.55'; // default bottom-left
+      if (facecamPosition === 'top-left') {
+        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=0:y=0';
+      } else if (facecamPosition === 'bottom-right') {
+        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=iw*0.65:y=ih*0.55';
+      } else if (facecamPosition === 'top-right') {
+        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=iw*0.65:y=0';
+      }
+
+      const splitFilter = [
+        `[0:v]split=2[cam_in][game_in]`,
+        `[cam_in]${camCrop},scale=1080:720:force_original_aspect_ratio=increase,crop=1080:720[cam]`,
+        `[game_in]crop=w=ih*(1080/1200):h=ih:x=(iw-ow)/2:y=0,scale=1080:1200[game]`,
+        `[cam][game]vstack=inputs=2[outv]`
+      ].join(';');
+
+      filterArgs = [
+        '-filter_complex', splitFilter,
+        '-map', '[outv]',
+        '-map', '0:a?'
+      ];
+    } else if (layout === 'blur') {
+      // ── Blurred Background Layout (16:9 gameplay centered + vertical blur) ──
+      const blurFilter = [
+        `[0:v]split=2[bg][fg]`,
+        `[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5[bg_blurred]`,
+        `[fg]scale=1080:-1[fg_scaled]`,
+        `[bg_blurred][fg_scaled]overlay=(W-w)/2:(H-h)/2[outv]`
+      ].join(';');
+
+      filterArgs = [
+        '-filter_complex', blurFilter,
+        '-map', '[outv]',
+        '-map', '0:a?'
+      ];
+    } else if (layout === 'crop') {
+      // ── Standard 9:16 Center Crop ──
+      filterArgs = [
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920'
+      ];
+    } else {
+      // ── 16:9 Landscape ──
+      filterArgs = [];
+    }
 
     const args = [
       '-y',
@@ -242,7 +320,7 @@ export class StreamBuffer {
       '-i', concatFile,
       '-ss', startOffsetSec.toFixed(2),
       '-t', clipDurationSec.toFixed(2),
-      ...vfArgs,
+      ...filterArgs,
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', '22',
@@ -253,7 +331,7 @@ export class StreamBuffer {
       outFilePath,
     ];
 
-    console.log(`[stream-buffer] Extracting clip (${clipDurationSec.toFixed(1)}s) -> ${outFilePath}...`);
+    console.log(`[stream-buffer] Extracting clip (${clipDurationSec.toFixed(1)}s, layout: ${layout}, facecam: ${facecamPosition}) -> ${outFilePath}...`);
 
     await new Promise<void>((resolve, reject) => {
       const proc = spawn('ffmpeg', args, { stdio: 'pipe' });

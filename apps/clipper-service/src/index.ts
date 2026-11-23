@@ -135,10 +135,12 @@ app.get('/api/live/status', (_req, res) => {
 });
 
 app.post('/api/live/start', async (req, res) => {
-  const { platform, channelOrUrl, vertical, spikeMultiplier, minSpikeThreshold } = req.body as {
+  const { platform, channelOrUrl, vertical, layout, facecamPosition, spikeMultiplier, minSpikeThreshold } = req.body as {
     platform: 'twitch' | 'youtube';
     channelOrUrl: string;
     vertical?: boolean;
+    layout?: 'split' | 'crop' | 'blur' | 'landscape';
+    facecamPosition?: 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right';
     spikeMultiplier?: number;
     minSpikeThreshold?: number;
   };
@@ -153,6 +155,8 @@ app.post('/api/live/start', async (req, res) => {
       platform,
       channelOrUrl,
       vertical: vertical ?? true,
+      layout: layout ?? (vertical === false ? 'landscape' : 'split'),
+      facecamPosition: facecamPosition ?? 'auto',
       spikeMultiplier: spikeMultiplier ?? 2.5,
       minSpikeThreshold: minSpikeThreshold ?? 4.0,
     });
