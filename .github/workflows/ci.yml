@@ -23,7 +23,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --allow-build esbuild --allow-build nx
 
       - name: Build & Typecheck Monorepo
         run: pnpm nx run-many -t build typecheck

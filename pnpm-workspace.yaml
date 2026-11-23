@@ -2,6 +2,10 @@ packages:
   - "apps/*"
   - "packages/*"
 
+allowBuilds:
+  esbuild: true
+  nx: true
+
 onlyBuiltDependencies:
   - esbuild
   - nx
