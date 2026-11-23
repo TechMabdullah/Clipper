@@ -1,0 +1,4 @@
+# Python dependencies for Clipper Studio (Facecam Tracking & Terminal UI)
+opencv-python==4.10.0.84
+rich>=13.0.0
+requests>=2.28.0
