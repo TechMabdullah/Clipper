@@ -2,8 +2,19 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 
-export type ClipLayout = 'split' | 'crop' | 'blur' | 'landscape';
+export type ClipLayout = 'split' | 'split-crop' | 'crop' | 'blur' | 'landscape';
 export type FacecamPosition = 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right';
+
+export interface FacecamDetectionResult {
+  found: boolean;
+  corner: FacecamPosition;
+  crop_x?: number;
+  crop_y?: number;
+  crop_w?: number;
+  crop_h?: number;
+  img_width?: number;
+  img_height?: number;
+}
 
 export interface RecordedSegment {
   file: string;
@@ -202,17 +213,22 @@ export class StreamBuffer {
 
   /**
    * Attempts automatic face detection on a video segment using OpenCV.
-   * Returns detected corner: 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right'.
+   * Returns detected facecam bounding box and corner position.
    */
-  private async detectFaceCorner(sampleSegmentPath: string): Promise<FacecamPosition> {
-    const sampleImg = path.join(this.bufferDir, `detect_${Date.now()}.jpg`);
+  public async detectFaceCam(sampleSegmentPath?: string): Promise<FacecamDetectionResult> {
+    const targetFile = sampleSegmentPath ?? (this.segments.length > 0 ? this.segments[this.segments.length - 1]?.file : null);
+    if (!targetFile || !fs.existsSync(targetFile)) {
+      return { found: false, corner: 'top-left' };
+    }
+
+    const sampleImg = path.join(this.bufferDir, `detect_${Date.now()}.png`);
     const pyScript = path.resolve('apps/clipper-service/src/live/detect_face.py');
 
     try {
       await new Promise<void>((resolve, reject) => {
         const p = spawn('ffmpeg', [
-          '-y', '-ss', '0.5', '-i', sampleSegmentPath,
-          '-vframes', '1', '-q:v', '2', sampleImg
+          '-y', '-i', targetFile,
+          '-vframes', '1', '-update', '1', sampleImg
         ], { stdio: 'ignore' });
         p.on('close', (c) => c === 0 ? resolve() : reject(new Error('frame extract failed')));
         p.on('error', reject);
@@ -230,15 +246,45 @@ export class StreamBuffer {
 
       const data = JSON.parse(out);
       if (data.found && data.corner) {
-        console.log(`[stream-buffer] 👤 Auto Facecam detected in: ${data.corner}`);
-        return data.corner as FacecamPosition;
+        console.log(`[stream-buffer] 👤 Auto Facecam detected in ${data.corner}: x=${data.crop_x}, y=${data.crop_y}, w=${data.crop_w}, h=${data.crop_h}`);
+        return data as FacecamDetectionResult;
       }
     } catch (err) {
-      console.warn('[stream-buffer] Auto face detection fallback to bottom-left');
+      console.warn('[stream-buffer] Auto face detection fallback to top-left');
     }
 
     try { if (fs.existsSync(sampleImg)) fs.unlinkSync(sampleImg); } catch {}
-    return 'bottom-left';
+    return { found: false, corner: 'top-left' };
+  }
+
+  /**
+   * Captures the most recent frame from the rolling buffer for the web live preview.
+   */
+  public async getLatestSnapshot(): Promise<Buffer | null> {
+    if (this.segments.length === 0) return null;
+    const latestSeg = this.segments[this.segments.length - 1];
+    if (!latestSeg || !fs.existsSync(latestSeg.file)) return null;
+
+    const tmpImg = path.join(this.bufferDir, `latest_preview_${Date.now()}.png`);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const p = spawn('ffmpeg', [
+          '-y', '-i', latestSeg.file,
+          '-vframes', '1', '-update', '1', tmpImg
+        ], { stdio: 'ignore' });
+        p.on('close', (c) => c === 0 ? resolve() : reject(new Error('snapshot failed')));
+        p.on('error', reject);
+      });
+
+      if (fs.existsSync(tmpImg)) {
+        const data = fs.readFileSync(tmpImg);
+        try { fs.unlinkSync(tmpImg); } catch {}
+        return data;
+      }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   public async extractClip(
@@ -272,29 +318,76 @@ export class StreamBuffer {
       .join('\n');
     fs.writeFileSync(concatFile, concatContent, 'utf8');
 
-    // Auto-resolve facecam corner if set to auto
-    if (layout === 'split' && facecamPosition === 'auto') {
-      facecamPosition = await this.detectFaceCorner(firstSeg.file);
+    // Auto-detect or resolve facecam bounding box
+    let detectedCam: FacecamDetectionResult | null = null;
+    if (layout === 'split' || layout === 'split-crop') {
+      if (facecamPosition === 'auto') {
+        // Multi-segment candidate check across the clip window:
+        // 1. Middle segment (active gameplay/streamer)
+        // 2. Last segment
+        // 3. First segment
+        const candidates = [
+          matching[Math.floor(matching.length / 2)],
+          matching[matching.length - 1],
+          matching[0],
+        ].filter(Boolean);
+
+        for (const cand of candidates) {
+          if (cand && fs.existsSync(cand.file)) {
+            const res = await this.detectFaceCam(cand.file);
+            if (res.found) {
+              detectedCam = res;
+              facecamPosition = res.corner;
+              break;
+            }
+          }
+        }
+
+        if (!detectedCam || !detectedCam.found) {
+          facecamPosition = 'top-left'; // default fallback for top streamers
+        }
+      }
     }
 
     // Build FFmpeg filter args based on selected layout
     let filterArgs: string[] = [];
 
-    if (layout === 'split') {
+    if (layout === 'split' || layout === 'split-crop') {
       // ── Split-Screen Layout: Facecam Top (1080x720) + Gameplay Bottom (1080x1200) ──
-      let camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=0:y=ih*0.55'; // default bottom-left
-      if (facecamPosition === 'top-left') {
-        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=0:y=0';
-      } else if (facecamPosition === 'bottom-right') {
-        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=iw*0.65:y=ih*0.55';
+      // Calculate exact 1080:720 (1.5 ratio) facecam crop so there is ZERO stretching or distortion
+      let camCrop = '';
+      if (detectedCam && detectedCam.found && detectedCam.crop_w && detectedCam.crop_h) {
+        camCrop = `crop=${detectedCam.crop_w}:${detectedCam.crop_h}:${detectedCam.crop_x}:${detectedCam.crop_y}`;
+      } else if (facecamPosition === 'top-left') {
+        camCrop = 'crop=w=iw*0.30:h=iw*0.30*(720/1080):x=0:y=0';
+      } else if (facecamPosition === 'bottom-left') {
+        camCrop = 'crop=w=iw*0.30:h=iw*0.30*(720/1080):x=0:y=ih-h';
       } else if (facecamPosition === 'top-right') {
-        camCrop = 'crop=w=iw*0.35:h=ih*0.45:x=iw*0.65:y=0';
+        camCrop = 'crop=w=iw*0.30:h=iw*0.30*(720/1080):x=iw-w:y=0';
+      } else if (facecamPosition === 'bottom-right') {
+        camCrop = 'crop=w=iw*0.30:h=iw*0.30*(720/1080):x=iw-w:y=ih-h';
+      } else {
+        camCrop = 'crop=w=iw*0.30:h=iw*0.30*(720/1080):x=0:y=0';
+      }
+
+      let gameChain = '';
+      if (layout === 'split-crop') {
+        // Center action crop to fill 1080x1200
+        gameChain = `[game_in]crop=w=ih*(1080/1200):h=ih:x=(iw-ow)/2:y=0,scale=1080:1200[game]`;
+      } else {
+        // Industry-standard pro split: Full 16:9 gameplay uncropped centered + ambient blur background
+        gameChain = [
+          `[game_in]split=2[gbg][gfg]`,
+          `[gbg]scale=1080:1200:force_original_aspect_ratio=increase,crop=1080:1200,boxblur=25:5[bg_blur]`,
+          `[gfg]scale=1080:-1[fg_scaled]`,
+          `[bg_blur][fg_scaled]overlay=0:(1200-h)/2[game]`
+        ].join(';');
       }
 
       const splitFilter = [
         `[0:v]split=2[cam_in][game_in]`,
-        `[cam_in]${camCrop},scale=1080:720:force_original_aspect_ratio=increase,crop=1080:720[cam]`,
-        `[game_in]crop=w=ih*(1080/1200):h=ih:x=(iw-ow)/2:y=0,scale=1080:1200[game]`,
+        `[cam_in]${camCrop},scale=1080:720[cam]`,
+        gameChain,
         `[cam][game]vstack=inputs=2[outv]`
       ].join(';');
 

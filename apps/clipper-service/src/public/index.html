@@ -105,10 +105,11 @@
             <option value="youtube">YouTube</option>
           </select>
           <input type="text" id="liveChannel" placeholder="e.g. caseoh_, flaminhotmitts, or stream URL" style="flex: 1; min-width: 200px;">
-          <select id="liveLayout" style="width: 230px;" onchange="toggleFacecamPos(this.value)">
-            <option value="split" selected>📱 Split: Facecam + Game (9:16)</option>
-            <option value="crop">📱 9:16 Center Crop</option>
-            <option value="blur">📱 9:16 Blurred Background</option>
+          <select id="liveLayout" style="width: 250px;" onchange="toggleFacecamPos(this.value)">
+            <option value="split" selected>📱 Split: Facecam + Ambient 16:9 Game</option>
+            <option value="split-crop">📱 Split: Facecam + Action Center Crop</option>
+            <option value="crop">📱 9:16 Action Center Crop</option>
+            <option value="blur">📱 9:16 Full Blurred Background</option>
             <option value="landscape">🖥️ 16:9 Landscape</option>
           </select>
           <select id="liveFacecamPos" style="width: 200px;">
@@ -142,6 +143,39 @@
         <div class="metric-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center;">
           <button class="btn btn-red" style="width: 100%; padding: 14px;" onclick="triggerManualClip()">💥 Clip Last 20s–40s Now</button>
           <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Manual override instant cut (20s min)</div>
+        </div>
+      </div>
+
+      <!-- LIVE STREAM PREVIEW & FACECAM VISUALIZER CARD -->
+      <div class="card" id="previewCard" style="display: none; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <div class="card-title" style="margin: 0;">📺 Live Stream Preview</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="previewStreamTitle">Connecting to live feed...</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn" style="font-size: 12px; padding: 5px 12px;" id="btnModeEmbed" onclick="setPreviewMode('embed')">▶ Live Video</button>
+            <button class="btn btn-secondary" style="font-size: 12px; padding: 5px 12px;" id="btnModeFacecam" onclick="setPreviewMode('facecam')">👤 Facecam Inspector</button>
+          </div>
+        </div>
+
+        <!-- Video Player View -->
+        <div id="previewEmbedWrap" style="position: relative; width: 100%; height: 420px; background: #000; border-radius: 8px; overflow: hidden;">
+          <iframe id="streamEmbedIframe" src="" style="width: 100%; height: 100%; border: none;" allowfullscreen></iframe>
+        </div>
+
+        <!-- DVR Snapshot & Facecam Visualizer View -->
+        <div id="previewFacecamWrap" style="display: none; position: relative; width: 100%; min-height: 380px; max-height: 480px; background: #09090b; border-radius: 8px; overflow: hidden; align-items: center; justify-content: center;">
+          <div style="position: relative; max-width: 100%; max-height: 100%; margin: auto;" id="snapshotContainer">
+            <img id="previewFrameImg" src="" style="max-height: 440px; max-width: 100%; display: block; border-radius: 6px;" onload="updateFacecamOverlay()">
+            <!-- Overlay green box -->
+            <div id="facecamOverlayBox" style="position: absolute; border: 3px solid #22c55e; background: rgba(34, 197, 94, 0.2); border-radius: 4px; pointer-events: none; display: none; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);">
+              <span style="background: #22c55e; color: #000; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 2px; position: absolute; top: -20px; left: -1px; white-space: nowrap;">FACECAM (1080x720 TOP CROP)</span>
+            </div>
+          </div>
+          <div id="facecamInfoBar" style="position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); padding: 6px 12px; border-radius: 6px; font-size: 12px; border: 1px solid var(--card-border);">
+            Facecam Status: <span id="facecamStatusText" style="color: #22c55e; font-weight: 600;">Detecting...</span>
+          </div>
         </div>
       </div>
 
@@ -247,7 +281,70 @@
     // ── Live Stream Functions ─────────────────────────────────────────────
     function toggleFacecamPos(layout) {
       const posSelect = document.getElementById('liveFacecamPos');
-      posSelect.style.display = (layout === 'split') ? 'inline-block' : 'none';
+      posSelect.style.display = (layout === 'split' || layout === 'split-crop') ? 'inline-block' : 'none';
+    }
+
+    let currentPreviewMode = 'embed';
+    let currentEmbedUrl = '';
+    let currentFacecamData = null;
+
+    function setPreviewMode(mode) {
+      currentPreviewMode = mode;
+      const embedWrap = document.getElementById('previewEmbedWrap');
+      const facecamWrap = document.getElementById('previewFacecamWrap');
+      const btnEmbed = document.getElementById('btnModeEmbed');
+      const btnFacecam = document.getElementById('btnModeFacecam');
+
+      if (mode === 'embed') {
+        embedWrap.style.display = 'block';
+        facecamWrap.style.display = 'none';
+        btnEmbed.classList.remove('btn-secondary');
+        btnFacecam.classList.add('btn-secondary');
+      } else {
+        embedWrap.style.display = 'none';
+        facecamWrap.style.display = 'flex';
+        btnFacecam.classList.remove('btn-secondary');
+        btnEmbed.classList.add('btn-secondary');
+        refreshSnapshot();
+      }
+    }
+
+    async function refreshSnapshot() {
+      try {
+        const fcRes = await fetch('/api/live/preview-facecam');
+        const fcData = await fcRes.json();
+        if (fcData.ok && fcData.facecam) {
+          currentFacecamData = fcData.facecam;
+        }
+
+        const img = document.getElementById('previewFrameImg');
+        img.src = '/api/live/preview-frame?t=' + Date.now();
+      } catch {}
+    }
+
+    function updateFacecamOverlay() {
+      const box = document.getElementById('facecamOverlayBox');
+      const statusText = document.getElementById('facecamStatusText');
+      const img = document.getElementById('previewFrameImg');
+
+      if (!currentFacecamData || !currentFacecamData.found || !img.naturalWidth) {
+        box.style.display = 'none';
+        statusText.innerText = currentFacecamData?.corner ? ('Preset Position: ' + currentFacecamData.corner) : 'Searching for streamer facecam...';
+        statusText.style.color = 'var(--text-muted)';
+        return;
+      }
+
+      const scaleX = img.clientWidth / img.naturalWidth;
+      const scaleY = img.clientHeight / img.naturalHeight;
+
+      box.style.left = (currentFacecamData.crop_x * scaleX) + 'px';
+      box.style.top = (currentFacecamData.crop_y * scaleY) + 'px';
+      box.style.width = (currentFacecamData.crop_w * scaleX) + 'px';
+      box.style.height = (currentFacecamData.crop_h * scaleY) + 'px';
+      box.style.display = 'block';
+
+      statusText.innerText = `Auto-Detected Facecam (${currentFacecamData.corner}): ${currentFacecamData.crop_w}x${currentFacecamData.crop_h}`;
+      statusText.style.color = '#22c55e';
     }
 
     async function startLive() {
@@ -300,28 +397,41 @@
       }
     }
 
-    function updateLiveUI(active, platform = '', target = '', layout = 'split', facecam = 'auto') {
+    function updateLiveUI(active, platform = '', target = '', layout = 'split', facecam = 'auto', embedUrl = '') {
       const statusEl = document.getElementById('monitorStatus');
       const targetEl = document.getElementById('monitorTarget');
       const startBtn = document.getElementById('btnStartLive');
       const stopBtn = document.getElementById('btnStopLive');
+      const previewCard = document.getElementById('previewCard');
+      const iframe = document.getElementById('streamEmbedIframe');
 
       if (active) {
         statusEl.innerText = '🔴 MONITORING';
         statusEl.style.color = 'var(--red)';
-        targetEl.innerText = `${platform.toUpperCase()}: ${target} (${layout}${layout === 'split' ? ' / ' + facecam : ''})`;
+        targetEl.innerText = `${platform.toUpperCase()}: ${target} (${layout}${layout.includes('split') ? ' / ' + facecam : ''})`;
         startBtn.style.display = 'none';
         stopBtn.style.display = 'inline-block';
+        previewCard.style.display = 'block';
+        document.getElementById('previewStreamTitle').innerText = `${platform.toUpperCase()}: ${target}`;
+
+        if (embedUrl && embedUrl !== currentEmbedUrl) {
+          currentEmbedUrl = embedUrl;
+          iframe.src = embedUrl;
+        }
       } else {
         statusEl.innerText = 'Idle';
         statusEl.style.color = 'var(--text)';
         targetEl.innerText = '—';
         startBtn.style.display = 'inline-block';
         stopBtn.style.display = 'none';
+        previewCard.style.display = 'none';
+        iframe.src = '';
+        currentEmbedUrl = '';
       }
     }
 
-    // Poll live status every 1s
+    // Poll live status every 1.2s
+    let pollTick = 0;
     setInterval(async () => {
       try {
         const res = await fetch('/api/live/status');
@@ -336,7 +446,13 @@
         else document.getElementById('velocityBar').style.background = 'var(--accent)';
 
         if (s.active) {
-          updateLiveUI(true, s.platform, s.channelOrUrl);
+          updateLiveUI(true, s.platform, s.channelOrUrl, s.layout, s.facecamPosition, s.embedUrl);
+          pollTick++;
+          if (currentPreviewMode === 'facecam' && pollTick % 2 === 0) {
+            refreshSnapshot();
+          }
+        } else {
+          updateLiveUI(false);
         }
 
         if (s.recentClips && s.recentClips.length > 0) {

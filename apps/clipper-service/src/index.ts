@@ -134,12 +134,28 @@ app.get('/api/live/status', (_req, res) => {
   res.json(liveManager.getStatus());
 });
 
+app.get('/api/live/preview-frame', async (_req, res) => {
+  const buf = await liveManager.getPreviewSnapshot();
+  if (!buf) {
+    res.status(404).send('No frame buffered yet');
+    return;
+  }
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(buf);
+});
+
+app.get('/api/live/preview-facecam', async (_req, res) => {
+  const facecam = await liveManager.getDetectedFacecam();
+  res.json({ ok: true, facecam });
+});
+
 app.post('/api/live/start', async (req, res) => {
   const { platform, channelOrUrl, vertical, layout, facecamPosition, spikeMultiplier, minSpikeThreshold } = req.body as {
     platform: 'twitch' | 'youtube' | 'kick';
     channelOrUrl: string;
     vertical?: boolean;
-    layout?: 'split' | 'crop' | 'blur' | 'landscape';
+    layout?: 'split' | 'split-crop' | 'crop' | 'blur' | 'landscape';
     facecamPosition?: 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right';
     spikeMultiplier?: number;
     minSpikeThreshold?: number;

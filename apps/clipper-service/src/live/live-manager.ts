@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import { ChatTracker, type ChatExplosionEvent, type LivePlatform } from './chat-tracker.js';
-import { StreamBuffer, type ClipLayout, type FacecamPosition } from './stream-buffer.js';
+import { StreamBuffer, type ClipLayout, type FacecamPosition, type FacecamDetectionResult } from './stream-buffer.js';
 import { db } from '../db.js';
 
 export interface LiveSessionConfig {
@@ -30,10 +30,49 @@ export class LiveManager extends EventEmitter {
       vertical: this.config?.vertical ?? true,
       layout: this.config?.layout ?? 'split',
       facecamPosition: this.config?.facecamPosition ?? 'auto',
+      embedUrl: this.getEmbedUrl(),
       currentVelocity: this.tracker?.currentVelocity ?? 0,
       baselineVelocity: this.tracker?.baselineVelocity ?? 0,
       recentClips: this.recentClips.slice(-10),
     };
+  }
+
+  public getEmbedUrl(): string | null {
+    if (!this.config || !this.isRunning) return null;
+    const { platform, channelOrUrl } = this.config;
+    const clean = channelOrUrl
+      .replace(/^https?:\/\/(?:www\.)?(?:twitch\.tv|kick\.com)\//i, '')
+      .replace(/\/.*$/, '')
+      .replace(/^#/, '')
+      .trim();
+
+    if (platform === 'twitch') {
+      return `https://player.twitch.tv/?channel=${clean}&parent=localhost&muted=true&autoplay=true`;
+    }
+    if (platform === 'kick') {
+      return `https://player.kick.com/${clean}?muted=true&autoplay=true`;
+    }
+    if (platform === 'youtube') {
+      if (channelOrUrl.includes('watch?v=')) {
+        const vid = channelOrUrl.split('watch?v=')[1]?.split('&')[0];
+        return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1`;
+      }
+      if (channelOrUrl.includes('/live/')) {
+        const vid = channelOrUrl.split('/live/')[1]?.split(/[/?#]/)[0];
+        return `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1`;
+      }
+    }
+    return null;
+  }
+
+  public async getPreviewSnapshot(): Promise<Buffer | null> {
+    if (!this.buffer) return null;
+    return this.buffer.getLatestSnapshot();
+  }
+
+  public async getDetectedFacecam(): Promise<FacecamDetectionResult | null> {
+    if (!this.buffer) return null;
+    return this.buffer.detectFaceCam();
   }
 
   public async startSession(config: LiveSessionConfig): Promise<void> {
