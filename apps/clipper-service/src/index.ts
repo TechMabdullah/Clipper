@@ -6,6 +6,7 @@ import chokidar from 'chokidar';
 import { db } from './db.js';
 import { enqueue } from './pipeline.js';
 import { liveManager } from './live/live-manager.js';
+import { MEDIA_ROOT, INBOX, CLIPS_DIR, ARCHIVE_DIR, getStorageInfo } from './storage.js';
 
 const app = express();
 app.use(express.json());
@@ -16,10 +17,6 @@ app.use((_req, res, next) => {
 });
 
 const PORT        = Number(process.env.CLIPPER_PORT ?? 4001);
-const MEDIA_ROOT  = process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
-const INBOX       = path.join(MEDIA_ROOT, '01_inbox');
-const CLIPS_DIR   = path.join(MEDIA_ROOT, '03_clips');
-const ARCHIVE_DIR = path.join(MEDIA_ROOT, '04_archive');
 const RETENTION   = Number(process.env.HDD_RETENTION_DAYS ?? 30);
 
 // ── Serve Local Web Dashboard ─────────────────────────────────────────────
@@ -129,9 +126,17 @@ app.get('/api/clipper/jobs/:id/progress', (req, res) => {
   req.on('close', () => clearInterval(iv));
 });
 
+// ── Storage Disk Auto-Discovery API ────────────────────────────────────────
+app.get('/api/storage/info', (_req, res) => {
+  res.json(getStorageInfo());
+});
+
 // ── Live Stream Chat Explosion Clipper API ────────────────────────────────
 app.get('/api/live/status', (_req, res) => {
-  res.json(liveManager.getStatus());
+  res.json({
+    ...liveManager.getStatus(),
+    storage: getStorageInfo(),
+  });
 });
 
 app.get('/api/live/preview-frame', async (_req, res) => {

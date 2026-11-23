@@ -9,3 +9,5 @@ apps/web/.next/
 node_modules/
 *.log
 ecosystem.config.js
+__pycache__/
+*.py[cod]

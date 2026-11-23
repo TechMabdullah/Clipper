@@ -190,7 +190,8 @@
       <div class="card" style="margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>Stored Locally:</strong> <code>D:\ClipperMedia\03_clips\</code>
+            <strong>Stored Locally:</strong> <code id="storageClipsPath">ClipperMedia/03_clips/</code>
+            <span id="diskModeBadge" style="margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 9999px; background: #27272a; color: var(--accent); font-weight: 600;">Auto-Disk</span>
           </div>
           <button class="btn btn-secondary" onclick="loadClips()">🔄 Refresh</button>
         </div>
@@ -207,7 +208,7 @@
           <button class="btn" onclick="submitIngestJob()">Submit Job</button>
         </div>
         <div style="font-size: 13px; color: var(--text-muted);">
-          💡 Or drag and drop video files directly into: <code>D:\ClipperMedia\01_inbox\</code> (auto-detected).
+          💡 Or drag and drop video files directly into: <code id="storageInboxPath">ClipperMedia/01_inbox/</code> (auto-detected).
         </div>
       </div>
 
@@ -438,6 +439,18 @@
         const s = await res.json();
         document.getElementById('metricVelocity').innerText = s.currentVelocity.toFixed(1);
         document.getElementById('metricBaseline').innerText = s.baselineVelocity.toFixed(1);
+
+        if (s.storage) {
+          const clipsEl = document.getElementById('storageClipsPath');
+          const inboxEl = document.getElementById('storageInboxPath');
+          const diskBadge = document.getElementById('diskModeBadge');
+          if (clipsEl) clipsEl.innerText = s.storage.clipsDir;
+          if (inboxEl) inboxEl.innerText = s.storage.inbox;
+          if (diskBadge) {
+            diskBadge.innerText = s.storage.isSingleDisk ? 'Single-Disk Mode' : 'Secondary-Disk Mode';
+            diskBadge.style.color = s.storage.isSingleDisk ? '#38bdf8' : '#4ade80';
+          }
+        }
         
         // Update velocity bar (scaled 0-25 msg/s)
         const pct = Math.min(100, (s.currentVelocity / 25) * 100);

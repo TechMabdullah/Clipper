@@ -1,11 +1,10 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { TEMP_DIR, MEDIA_ROOT } from './storage.js';
 
 const WHISPER_BIN   = process.env.WHISPER_BIN_PATH ?? '';
 const WHISPER_MODEL = process.env.WHISPER_MODEL_PATH ?? './models/ggml-base.en.bin';
-const MEDIA_ROOT    = process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
-const TEMP_DIR      = path.join(MEDIA_ROOT, '02_temp');
 
 export interface Segment {
   start: number;

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { resolveMediaRootDir } from '../storage.js';
 
 export type ClipLayout = 'split' | 'split-crop' | 'crop' | 'blur' | 'landscape';
 export type FacecamPosition = 'auto' | 'bottom-left' | 'top-left' | 'bottom-right' | 'top-right';
@@ -60,7 +61,7 @@ export class StreamBuffer {
     this.quality = options.quality ?? '720p60,720p,best';
     this.bufferWindowSec = options.bufferWindowSec ?? 240;
 
-    const mediaRoot = options.mediaRootDir ?? process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
+    const mediaRoot = options.mediaRootDir ?? resolveMediaRootDir();
     const sessionId = `live_${Date.now()}`;
     this.bufferDir = path.join(mediaRoot, '02_temp', 'live_buffer', sessionId);
     this.clipsDir = path.join(mediaRoot, '03_clips');

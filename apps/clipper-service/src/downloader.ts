@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { INBOX } from './storage.js';
 
 const YTDLP = process.env.YTDLP_BIN_PATH ?? 'yt-dlp';
-const MEDIA_ROOT = process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
-const INBOX = path.join(MEDIA_ROOT, '01_inbox');
 
 /**
  * Downloads a URL to 01_inbox/ using yt-dlp.

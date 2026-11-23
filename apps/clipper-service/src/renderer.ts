@@ -3,11 +3,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import type { Highlight } from './highlight-picker.js';
+import { CLIPS_DIR, TEMP_DIR } from './storage.js';
 
 const FFMPEG = process.env.FFMPEG_BIN_PATH ?? 'ffmpeg';
-const MEDIA_ROOT = process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
-const CLIPS_DIR = path.join(MEDIA_ROOT, '03_clips');
-const TEMP_DIR = path.join(MEDIA_ROOT, '02_temp');
 
 // Gotcha #PC-lag: concurrency = 1 enforced by the pipeline queue in index.ts
 // Here we just lower FFmpeg child process priority.

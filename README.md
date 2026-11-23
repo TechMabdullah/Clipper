@@ -275,12 +275,15 @@ GET /api/clipper/clips
 
 ---
 
-## 📁 Storage Folder Structure
+## 📁 Intelligent Storage & Single-Disk Auto-Discovery
 
-Clipper Studio organizes media using an optimized folder hierarchy:
+Clipper Studio automatically detects your machine's disk layout without requiring manual path setup:
+
+- **Dual-Disk Mode (SSD + HDD)**: If a secondary storage drive is available (e.g. `D:\` or `E:\`), it automatically places `ClipperMedia` on the secondary drive (e.g., `D:\ClipperMedia\`), offloading high-bitrate video writes and buffers from your primary OS drive.
+- **Single-Disk Mode (Single SSD or Laptop)**: If your computer only has **one disk** (e.g. `C:\`), Clipper Studio **automatically creates `C:\ClipperMedia` on that same disk** (or within `<project_dir>\ClipperMedia` if root permissions are restricted). No second disk is required!
 
 ```text
-D:\ClipperMedia\
+<DiskRoot>\ClipperMedia\
 ├── 01_inbox\       # Long-form batch video files for offline ingestion
 ├── 02_temp\        # Live stream rolling circular segments (auto-pruned)
 ├── 03_clips\       # Rendered 9:16 vertical shorts ready for upload

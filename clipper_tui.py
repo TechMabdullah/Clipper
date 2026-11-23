@@ -32,9 +32,51 @@ except ImportError:
     HAS_MSVCRT = False
 
 DEFAULT_API_URL = os.environ.get("CLIPPER_SERVICE_URL", "http://localhost:4001")
-MEDIA_CLIPS_DIR = os.environ.get("MEDIA_ROOT_DIR", r"D:\ClipperMedia\03_clips")
-if not os.path.exists(MEDIA_CLIPS_DIR):
-    MEDIA_CLIPS_DIR = r"D:\ClipperMedia\03_clips"
+
+def resolve_media_clips_dir() -> str:
+    """Intelligently resolves ClipperMedia location based on single-disk vs multi-disk systems."""
+    candidate = os.environ.get("MEDIA_ROOT_DIR")
+    if candidate:
+        clips = os.path.join(candidate, "03_clips")
+        drive = os.path.splitdrive(os.path.abspath(clips))[0]
+        if not drive or os.path.exists(drive + "\\"):
+            os.makedirs(clips, exist_ok=True)
+            return clips
+
+    # Detect available Windows drives
+    drives = []
+    if sys.platform == "win32":
+        for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+            d_path = f"{letter}:\\"
+            if os.path.exists(d_path):
+                drives.append(d_path)
+    else:
+        drives = ["/"]
+
+    current_drive = os.path.splitdrive(os.path.abspath(os.getcwd()))[0] + "\\"
+
+    # If multiple disks, check secondary disk first
+    if len(drives) > 1:
+        secondary = [d for d in drives if not d.upper().startswith("C:")]
+        for sec in secondary:
+            sec_clips = os.path.join(sec, "ClipperMedia", "03_clips")
+            try:
+                os.makedirs(sec_clips, exist_ok=True)
+                return sec_clips
+            except Exception:
+                pass
+
+    # Single-disk mode: place ClipperMedia on the same disk
+    same_disk = os.path.join(current_drive, "ClipperMedia", "03_clips")
+    try:
+        os.makedirs(same_disk, exist_ok=True)
+        return same_disk
+    except Exception:
+        fallback = os.path.abspath(os.path.join(os.getcwd(), "ClipperMedia", "03_clips"))
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+MEDIA_CLIPS_DIR = resolve_media_clips_dir()
 
 LAYOUT_OPTIONS = [
     ("split", "📱 Split: Facecam Top + Ambient 16:9 Game Bottom (Shorts)"),
@@ -261,7 +303,11 @@ class ClipperTUI:
                 name = os.path.basename(fpath)
                 table.add_row(ts[11:19] if len(ts) >= 19 else ts, name, fpath)
 
-        return Panel(table, title="Recently Caught Clips (Saved to D:\\ClipperMedia\\03_clips)", box=box.ROUNDED, style="magenta")
+        storage_meta = status.get("storage", {})
+        active_media = storage_meta.get("mediaRoot", MEDIA_CLIPS_DIR)
+        mode_str = "Single-Disk" if storage_meta.get("isSingleDisk", False) else "Dual-Disk"
+        panel_title = f"Recently Caught Clips (Saved to {active_media} • {mode_str})"
+        return Panel(table, title=panel_title, box=box.ROUNDED, style="magenta")
 
     def make_footer(self) -> Panel:
         hotkeys = Text.assemble(
