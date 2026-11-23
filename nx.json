@@ -21,7 +21,6 @@
     "test": { "cache": true }
   },
   "plugins": [
-    { "plugin": "@nx/next/plugin", "options": { "serveTargetName": "serve" } },
     { "plugin": "@nx/node/plugin", "options": { "serveTargetName": "serve" } }
   ]
 }

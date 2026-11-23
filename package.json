@@ -3,18 +3,20 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nx run-many -t serve -p web,api-gateway,notification-service",
-    "build": "nx run-many -t build",
-    "lint": "nx run-many -t lint",
-    "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test"
+    "clipper": "tsx --env-file=.env.local apps/clipper-service/src/index.ts",
+    "notify":  "tsx --env-file=.env.local apps/notification-service/src/index.ts",
+    "live":    "tsx --env-file=.env.local apps/clipper-service/src/live/cli.ts",
+    "dev":     "concurrently \"pnpm clipper\" \"pnpm notify\"",
+    "build":   "nx run-many -t build",
+    "lint":    "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck"
   },
   "devDependencies": {
     "@nx/eslint": "^20.0.0",
     "@nx/js": "^20.0.0",
-    "@nx/next": "^20.0.0",
-    "@nx/node": "^20.0.0",
+    "concurrently": "^9.0.0",
     "nx": "^20.0.0",
+    "tsx": "^4.0.0",
     "typescript": "^5.5.0"
   }
 }
