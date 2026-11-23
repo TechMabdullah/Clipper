@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clipper Studio — Local Control Dashboard</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card: #18181b;
+      --card-border: #27272a;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --red: #ef4444;
+      --green: #22c55e;
+      --yellow: #eab308;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--card-border); }
+    h1 { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .tagline { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 600; background: #27272a; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .status-dot.offline { background: var(--text-muted); }
+    
+    /* Navigation tabs */
+    .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+    .tab-btn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .tab-btn:hover { color: var(--text); background: #27272a; }
+    .tab-btn.active { background: var(--accent); color: white; }
+
+    /* Cards */
+    .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Forms & Inputs */
+    .form-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    input, select { background: #27272a; border: 1px solid #3f3f46; color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; outline: none; }
+    input:focus, select:focus { border-color: var(--accent); }
+    .btn { background: var(--accent); color: white; border: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-red { background: var(--red); }
+    .btn-red:hover { background: #dc2626; }
+    .btn-secondary { background: #27272a; color: var(--text); }
+    .btn-secondary:hover { background: #3f3f46; }
+
+    /* Live Monitor meters */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .metric-card { background: #202024; border: 1px solid #2e2e33; border-radius: 8px; padding: 16px; }
+    .metric-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    .metric-value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+    .velocity-bar-wrap { background: #27272a; border-radius: 6px; height: 10px; margin-top: 10px; overflow: hidden; }
+    .velocity-bar { height: 100%; width: 0%; background: var(--accent); transition: width 0.3s; }
+
+    /* Clips Grid */
+    .clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+    .clip-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+    .clip-preview-wrap { position: relative; width: 100%; height: 260px; background: black; display: flex; align-items: center; justify-content: center; }
+    .clip-preview-wrap video { max-width: 100%; max-height: 100%; }
+    .clip-details { padding: 14px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .clip-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; word-break: break-word; }
+    .clip-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+    .clip-actions { display: flex; gap: 8px; }
+    .clip-actions button { flex: 1; font-size: 12px; padding: 6px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--card-border); }
+    th { color: var(--text-muted); font-weight: 600; }
+
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #27272a; border: 1px solid var(--accent); padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; z-index: 100; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>🎬 Clipper Studio</h1>
+        <div class="tagline">Local-First Video Clipping & Live Chat Explosion Detector</div>
+      </div>
+      <div id="connectionStatus" class="status-badge">
+        <div class="status-dot"></div> Local Node Ready (:4001)
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('live')">💥 Live Chat Explosion</button>
+      <button class="tab-btn" onclick="switchTab('clips')">📁 Clips Library (<span id="clipsCount">0</span>)</button>
+      <button class="tab-btn" onclick="switchTab('ingest')">📥 Batch Video Ingest</button>
+      <button class="tab-btn" onclick="switchTab('notifications')">🔔 Notifications</button>
+    </div>
+
+    <!-- TAB 1: LIVE CHAT EXPLOSION -->
+    <div id="tab-live" class="tab-content">
+      <div class="card">
+        <div class="card-title">Live Stream Configuration</div>
+        <div class="form-row">
+          <select id="livePlatform" style="width: 140px;">
+            <option value="twitch" selected>Twitch</option>
+            <option value="youtube">YouTube</option>
+          </select>
+          <input type="text" id="liveChannel" placeholder="e.g. caseoh_ or https://youtube.com/live/..." style="flex: 1;">
+          <select id="liveFormat" style="width: 160px;">
+            <option value="true" selected>9:16 Vertical (Shorts)</option>
+            <option value="false">16:9 Landscape</option>
+          </select>
+          <button id="btnStartLive" class="btn" onclick="startLive()">Start Monitor</button>
+          <button id="btnStopLive" class="btn btn-secondary" onclick="stopLive()" style="display:none;">Stop Monitor</button>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Live Status</div>
+          <div class="metric-value" id="monitorStatus" style="font-size: 20px;">Idle</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;" id="monitorTarget">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Current Chat Velocity</div>
+          <div class="metric-value"><span id="metricVelocity">0.0</span> <span style="font-size: 14px; font-weight: normal;">msg/s</span></div>
+          <div class="velocity-bar-wrap"><div class="velocity-bar" id="velocityBar"></div></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Baseline (60s Avg)</div>
+          <div class="metric-value"><span id="metricBaseline">0.0</span> <span style="font-size: 14px; font-weight: normal;">msg/s</span></div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Spike Multiplier: 2.5x</div>
+        </div>
+        <div class="metric-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center;">
+          <button class="btn btn-red" style="width: 100%; padding: 14px;" onclick="triggerManualClip()">💥 Clip Last 20s Now</button>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Manual override instant cut</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Chat Explosion Triggers (-10s to +10s)</div>
+        <div id="liveClipsList" style="color: var(--text-muted); font-size: 14px;">No explosions caught in this session yet. Waiting for chat to explode...</div>
+      </div>
+    </div>
+
+    <!-- TAB 2: CLIPS LIBRARY -->
+    <div id="tab-clips" class="tab-content" style="display: none;">
+      <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong>Stored Locally:</strong> <code>D:\ClipperMedia\03_clips\</code>
+          </div>
+          <button class="btn btn-secondary" onclick="loadClips()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div id="clipsGrid" class="clips-grid"></div>
+    </div>
+
+    <!-- TAB 3: BATCH INGEST -->
+    <div id="tab-ingest" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-title">Ingest Video (Local or URL)</div>
+        <div class="form-row">
+          <input type="text" id="ingestUrl" placeholder="Paste YouTube URL (yt-dlp) or local file path" style="flex: 1;">
+          <button class="btn" onclick="submitIngestJob()">Submit Job</button>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted);">
+          💡 Or drag and drop video files directly into: <code>D:\ClipperMedia\01_inbox\</code> (auto-detected).
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ingestion Jobs</div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody">
+            <tr><td colspan="4" style="color: var(--text-muted);">No jobs found.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: NOTIFICATIONS -->
+    <div id="tab-notifications" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-title">Notification Channels (Desktop, Discord & Telegram)</div>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+          When a clip finishes rendering, notifications are dispatched with the local file path and size.
+        </p>
+        <button class="btn" onclick="sendTestNotification()">Send Test Notification</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Notification Log</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th>Message</th>
+              <th>Sent At</th>
+            </tr>
+          </thead>
+          <tbody id="notificationLogBody">
+            <tr><td colspan="3" style="color: var(--text-muted);">No notifications logged yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 3000);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      document.getElementById('tab-' + tab).style.display = 'block';
+      event.target.classList.add('active');
+      if (tab === 'clips') loadClips();
+      if (tab === 'ingest') loadJobs();
+      if (tab === 'notifications') loadNotifications();
+    }
+
+    // ── Live Stream Functions ─────────────────────────────────────────────
+    async function startLive() {
+      const platform = document.getElementById('livePlatform').value;
+      const channelOrUrl = document.getElementById('liveChannel').value.trim();
+      const vertical = document.getElementById('liveFormat').value === 'true';
+
+      if (!channelOrUrl) return alert('Please enter a channel name or stream URL');
+
+      const res = await fetch('/api/live/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, channelOrUrl, vertical })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast('Live monitor started!');
+        updateLiveUI(true, platform, channelOrUrl);
+      } else {
+        alert(data.error || 'Failed to start');
+      }
+    }
+
+    async function stopLive() {
+      const res = await fetch('/api/live/stop', { method: 'POST' });
+      const data = await res.json();
+      showToast('Live monitor stopped');
+      updateLiveUI(false);
+    }
+
+    async function triggerManualClip() {
+      showToast('Extracting last 20 seconds...');
+      const res = await fetch('/api/live/clip-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ durationSec: 20 })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast('✅ Clip saved: ' + data.clip.filePath);
+        loadClips();
+      } else {
+        alert(data.error || 'Failed to clip');
+      }
+    }
+
+    function updateLiveUI(active, platform = '', target = '') {
+      const statusEl = document.getElementById('monitorStatus');
+      const targetEl = document.getElementById('monitorTarget');
+      const startBtn = document.getElementById('btnStartLive');
+      const stopBtn = document.getElementById('btnStopLive');
+
+      if (active) {
+        statusEl.innerText = '🔴 MONITORING';
+        statusEl.style.color = 'var(--red)';
+        targetEl.innerText = `${platform.toUpperCase()}: ${target}`;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+      } else {
+        statusEl.innerText = 'Idle';
+        statusEl.style.color = 'var(--text)';
+        targetEl.innerText = '—';
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+      }
+    }
+
+    // Poll live status every 1s
+    setInterval(async () => {
+      try {
+        const res = await fetch('/api/live/status');
+        const s = await res.json();
+        document.getElementById('metricVelocity').innerText = s.currentVelocity.toFixed(1);
+        document.getElementById('metricBaseline').innerText = s.baselineVelocity.toFixed(1);
+        
+        // Update velocity bar (scaled 0-25 msg/s)
+        const pct = Math.min(100, (s.currentVelocity / 25) * 100);
+        document.getElementById('velocityBar').style.width = pct + '%';
+        if (pct > 70) document.getElementById('velocityBar').style.background = 'var(--red)';
+        else document.getElementById('velocityBar').style.background = 'var(--accent)';
+
+        if (s.active) {
+          updateLiveUI(true, s.platform, s.channelOrUrl);
+        }
+
+        if (s.recentClips && s.recentClips.length > 0) {
+          document.getElementById('liveClipsList').innerHTML = s.recentClips.map(c => `
+            <div style="padding: 8px 0; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between;">
+              <span>📁 <code>${c.filePath}</code></span>
+              <span style="color: var(--text-muted); font-size: 12px;">${new Date(c.timestamp).toLocaleTimeString()}</span>
+            </div>
+          `).join('');
+        }
+      } catch {}
+    }, 1200);
+
+    // ── Clips Library ─────────────────────────────────────────────────────
+    async function loadClips() {
+      try {
+        const res = await fetch('/api/clipper/clips');
+        const clips = await res.json();
+        document.getElementById('clipsCount').innerText = clips.length;
+        const grid = document.getElementById('clipsGrid');
+
+        if (!clips.length) {
+          grid.innerHTML = '<div style="color: var(--text-muted); grid-column: 1/-1;">No rendered clips yet. Drop a video or run live clipper!</div>';
+          return;
+        }
+
+        grid.innerHTML = clips.map(c => `
+          <div class="clip-card">
+            <div class="clip-preview-wrap">
+              <video src="/api/clipper/clips/${c.id}/file" controls preload="metadata"></video>
+            </div>
+            <div class="clip-details">
+              <div>
+                <div class="clip-title">${c.title}</div>
+                <div class="clip-meta">${(c.file_size_bytes / 1e6).toFixed(1)} MB • ${Math.round(c.duration_sec || 20)}s • ${c.created_at.slice(0, 10)}</div>
+              </div>
+              <div class="clip-actions">
+                <button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${c.file_path.replace(/\\/g, '\\\\')}'); showToast('Path copied to clipboard!');">📋 Copy Path</button>
+                <a class="btn" style="text-align: center; text-decoration: none;" href="/api/clipper/clips/${c.id}/file" download>⬇ Download</a>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ── Batch Ingest ──────────────────────────────────────────────────────
+    async function submitIngestJob() {
+      const input = document.getElementById('ingestUrl').value.trim();
+      if (!input) return alert('Enter a URL or path');
+      const body = input.startsWith('http') ? { sourceUrl: input } : { sourceFilePath: input };
+      const res = await fetch('/api/clipper/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const d = await res.json();
+      showToast('Job submitted: ' + d.id);
+      document.getElementById('ingestUrl').value = '';
+      loadJobs();
+    }
+
+    async function loadJobs() {
+      const res = await fetch('/api/clipper/jobs');
+      const jobs = await res.json();
+      const tbody = document.getElementById('jobsTableBody');
+      if (!jobs.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-muted);">No jobs found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = jobs.map(j => `
+        <tr>
+          <td><code>${j.id.slice(0, 8)}</code></td>
+          <td>${j.source_url || j.source_path || '—'}</td>
+          <td><strong>${j.status}</strong></td>
+          <td>${j.created_at.slice(0, 19).replace('T', ' ')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────
+    async function sendTestNotification() {
+      showToast('Sending test notification...');
+      const res = await fetch('http://localhost:4003/api/notifications/test', { method: 'POST' }).catch(() => null);
+      if (res && res.ok) {
+        showToast('✅ Test notification sent!');
+      } else {
+        showToast('⚠️ notification-service (:4003) offline or not responding');
+      }
+      loadNotifications();
+    }
+
+    async function loadNotifications() {
+      const res = await fetch('http://localhost:4003/api/notifications/log').catch(() => null);
+      const tbody = document.getElementById('notificationLogBody');
+      if (!res || !res.ok) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color: var(--text-muted);">Notification service is not running on port 4003. Run `pnpm notify` to start it.</td></tr>';
+        return;
+      }
+      const logs = await res.json();
+      tbody.innerHTML = logs.map(l => `
+        <tr>
+          <td><strong>${l.channel}</strong></td>
+          <td>${l.message}</td>
+          <td>${l.created_at.slice(0, 19).replace('T', ' ')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Initial load
+    loadClips();
+  </script>
+</body>
+</html>

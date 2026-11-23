@@ -9,6 +9,11 @@ import { liveManager } from './live/live-manager.js';
 
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  next();
+});
 
 const PORT        = Number(process.env.CLIPPER_PORT ?? 4001);
 const MEDIA_ROOT  = process.env.MEDIA_ROOT_DIR ?? 'D:/ClipperMedia';
@@ -16,6 +21,15 @@ const INBOX       = path.join(MEDIA_ROOT, '01_inbox');
 const CLIPS_DIR   = path.join(MEDIA_ROOT, '03_clips');
 const ARCHIVE_DIR = path.join(MEDIA_ROOT, '04_archive');
 const RETENTION   = Number(process.env.HDD_RETENTION_DAYS ?? 30);
+
+// ── Serve Local Web Dashboard ─────────────────────────────────────────────
+const publicDir = path.resolve('apps/clipper-service/src/public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+}
 
 // ── Watch 01_inbox/ — auto-ingest any video dropped in ───────────────────
 if (fs.existsSync(INBOX)) {

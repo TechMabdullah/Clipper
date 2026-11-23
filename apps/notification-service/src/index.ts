@@ -12,6 +12,11 @@ import { openDb } from '@clipper/db-utils';
 
 const app = express();
 app.use(express.json());
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  next();
+});
 
 const PORT = Number(process.env.NOTIFICATION_PORT ?? 4003);
 const DATA_DIR = process.env.DATA_DIR ?? './data';
