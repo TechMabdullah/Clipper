@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import { ChatTracker, type ChatExplosionEvent, type LivePlatform } from './chat-tracker.js';
 import { StreamBuffer, type ClipLayout, type FacecamPosition, type FacecamDetectionResult } from './stream-buffer.js';
-import { db } from '../db.js';
+import { db, insertClip } from '../db.js';
 
 export interface LiveSessionConfig {
   platform: LivePlatform;
@@ -200,27 +200,17 @@ export class LiveManager extends EventEmitter {
         const jobId = `live_${cleanChannel}`;
         const description = `Chat exploded to ${evt.velocity} msg/s (${evt.multiplier}x baseline). Sample: ${evt.sampleMessages.slice(0, 3).join(' | ')}`;
 
-        // Ensure parent ingest_jobs row exists (fixes FOREIGN KEY constraint)
-        db.prepare(`
-          INSERT OR IGNORE INTO ingest_jobs (id, source_url, status)
-          VALUES (?, ?, 'DONE')
-        `).run(jobId, this.config?.channelOrUrl ?? 'live');
-
-        // Insert into clips table
-        db.prepare(`
-          INSERT INTO clips (id, job_id, title, description, start_sec, end_sec, duration_sec, file_path, file_size_bytes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          clipId,
+        insertClip({
+          id: clipId,
           jobId,
           title,
           description,
-          0,
-          result.durationSec,
-          result.durationSec,
-          result.filePath,
-          result.fileSizeBytes
-        );
+          startSec: 0,
+          endSec: result.durationSec,
+          durationSec: result.durationSec,
+          filePath: result.filePath,
+          fileSizeBytes: result.fileSizeBytes,
+        });
 
         this.recentClips.push({
           id: clipId,
@@ -267,26 +257,17 @@ export class LiveManager extends EventEmitter {
     const clipId = crypto.randomUUID();
     const jobId = `manual_${cleanChannel}`;
 
-    // Ensure parent ingest_jobs row exists (fixes FOREIGN KEY constraint)
-    db.prepare(`
-      INSERT OR IGNORE INTO ingest_jobs (id, source_url, status)
-      VALUES (?, ?, 'DONE')
-    `).run(jobId, this.config?.channelOrUrl ?? 'manual');
-
-    db.prepare(`
-      INSERT INTO clips (id, job_id, title, description, start_sec, end_sec, duration_sec, file_path, file_size_bytes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      clipId,
+    insertClip({
+      id: clipId,
       jobId,
       title,
-      `Manual clip (${clampedDuration}s)`,
-      0,
-      result.durationSec,
-      result.durationSec,
-      result.filePath,
-      result.fileSizeBytes
-    );
+      description: `Manual clip (${clampedDuration}s)`,
+      startSec: 0,
+      endSec: result.durationSec,
+      durationSec: result.durationSec,
+      filePath: result.filePath,
+      fileSizeBytes: result.fileSizeBytes,
+    });
 
     this.recentClips.push({
       id: clipId,

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { openDb, type Db } from '@clipper/db-utils';
 
 const DATA_DIR = process.env.DATA_DIR ?? './data';
@@ -32,3 +33,54 @@ db.exec(`
   INSERT OR IGNORE INTO ingest_jobs (id, source_url, status)
   VALUES ('default', 'system', 'DONE');
 `);
+
+export interface InsertClipParams {
+  id?: string;
+  jobId?: string;
+  title: string;
+  description?: string;
+  startSec?: number;
+  endSec?: number;
+  durationSec?: number;
+  filePath: string;
+  fileSizeBytes?: number;
+  status?: string;
+}
+
+/**
+ * Safely inserts a clip into SQLite, guaranteeing that the parent
+ * ingest_jobs row exists first to prevent FOREIGN KEY constraint violations.
+ */
+export function insertClip(params: InsertClipParams): string {
+  const clipId = params.id ?? crypto.randomUUID();
+  const jobId = params.jobId ?? 'default';
+
+  // Ensure parent job exists so SQLite FOREIGN KEY constraint is always satisfied
+  db.prepare(`
+    INSERT OR IGNORE INTO ingest_jobs (id, source_url, status)
+    VALUES (?, ?, 'DONE')
+  `).run(jobId, 'system');
+
+  const startSec = params.startSec ?? 0;
+  const duration = params.durationSec ?? Math.max(0, (params.endSec ?? 0) - startSec);
+  const endSec = params.endSec ?? (startSec + duration);
+
+  db.prepare(`
+    INSERT INTO clips (id, job_id, title, description, start_sec, end_sec, duration_sec, file_path, file_size_bytes, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    clipId,
+    jobId,
+    params.title,
+    params.description ?? '',
+    startSec,
+    endSec,
+    duration,
+    params.filePath,
+    params.fileSizeBytes ?? 0,
+    params.status ?? 'READY'
+  );
+
+  return clipId;
+}
+

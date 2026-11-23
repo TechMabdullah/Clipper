@@ -1,4 +1,4 @@
-import { db } from './db.js';
+import { db, insertClip } from './db.js';
 import { downloadUrl, probeDuration } from './downloader.js';
 import { transcribe } from './transcriber.js';
 import { pickHighlights } from './highlight-picker.js';
@@ -82,11 +82,16 @@ async function processJob(jobId: string): Promise<void> {
     const rendered = await renderClip(sourcePath, h, assPath, outputName);
     const duration = h.endSec - h.startSec;
 
-    db.prepare(`
-      INSERT INTO clips (id, job_id, title, description, start_sec, end_sec, duration_sec, file_path, file_size_bytes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(crypto.randomUUID(), jobId, h.title, h.description,
-           h.startSec, h.endSec, duration, rendered.filePath, rendered.fileSizeBytes);
+    insertClip({
+      jobId,
+      title: h.title,
+      description: h.description,
+      startSec: h.startSec,
+      endSec: h.endSec,
+      durationSec: duration,
+      filePath: rendered.filePath,
+      fileSizeBytes: rendered.fileSizeBytes,
+    });
 
     // Fire-and-forget desktop notification
     void notifyClipReady(h.title, rendered.filePath, rendered.fileSizeBytes);
