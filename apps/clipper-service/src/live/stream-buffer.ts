@@ -14,6 +14,7 @@ export interface RecordedSegment {
 
 export interface StreamBufferOptions {
   channelOrUrl: string;
+  platform?: 'twitch' | 'youtube' | 'kick';
   mediaRootDir?: string;
   quality?: string;
   /** Keep buffer duration in seconds (default: 240s = 4 minutes) */
@@ -29,6 +30,7 @@ export interface ExtractClipOptions {
 
 export class StreamBuffer {
   private channelOrUrl: string;
+  private platform: 'twitch' | 'youtube' | 'kick';
   private quality: string;
   private bufferWindowSec: number;
   private bufferDir: string;
@@ -43,6 +45,7 @@ export class StreamBuffer {
 
   constructor(options: StreamBufferOptions) {
     this.channelOrUrl = options.channelOrUrl;
+    this.platform = options.platform ?? 'twitch';
     this.quality = options.quality ?? '720p60,720p,best';
     this.bufferWindowSec = options.bufferWindowSec ?? 240;
 
@@ -60,20 +63,31 @@ export class StreamBuffer {
     this.isBuffering = true;
     this.streamStartEpochMs = Date.now();
 
-    console.log(`[stream-buffer] Launching streamlink capture for: ${this.channelOrUrl}`);
-
-    let targetUrl = this.channelOrUrl;
+    let targetUrl = this.channelOrUrl.trim();
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-      targetUrl = `https://www.twitch.tv/${targetUrl}`;
+      if (this.platform === 'kick') {
+        targetUrl = `https://kick.com/${targetUrl}`;
+      } else if (this.platform === 'youtube') {
+        targetUrl = targetUrl.startsWith('UC')
+          ? `https://www.youtube.com/channel/${targetUrl}/live`
+          : `https://www.youtube.com/@${targetUrl.replace(/^@/, '')}/live`;
+      } else {
+        targetUrl = `https://www.twitch.tv/${targetUrl}`;
+      }
     }
+
+    console.log(`[stream-buffer] Launching streamlink capture for ${this.platform}: ${targetUrl}`);
 
     const streamlinkArgs = [
       targetUrl,
       this.quality,
       '--stdout',
-      '--twitch-disable-ads',
       '--loglevel', 'warning',
     ];
+
+    if (this.platform === 'twitch' || targetUrl.includes('twitch.tv')) {
+      streamlinkArgs.push('--twitch-disable-ads');
+    }
 
     this.streamlinkProc = spawn('streamlink', streamlinkArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],

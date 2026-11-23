@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
+import crypto from 'node:crypto';
 
-export type LivePlatform = 'twitch' | 'youtube';
+export type LivePlatform = 'twitch' | 'youtube' | 'kick';
 
 export interface ChatMessage {
   author: string;
@@ -67,6 +68,8 @@ export class ChatTracker extends EventEmitter {
       this.startTwitch();
     } else if (this.platform === 'youtube') {
       await this.startYouTube();
+    } else if (this.platform === 'kick') {
+      await this.startKick();
     }
 
     // Velocity evaluator runs every 1000ms
@@ -257,6 +260,121 @@ export class ChatTracker extends EventEmitter {
       }
     } catch (err) {
       console.error('[chat-tracker] Error initializing YouTube chat:', err);
+    }
+  }
+
+  // ── Kick Live Chat (Guest Centrifugo WebSocket) ────────────────────────
+  private async startKick(): Promise<void> {
+    const channel = this.channelOrUrl
+      .replace(/^https?:\/\/(?:www\.)?kick\.com\//i, '')
+      .replace(/\/.*$/, '')
+      .trim();
+
+    console.log(`[chat-tracker] Connecting to Kick chat for: ${channel}...`);
+
+    try {
+      // 1. Fetch channel info to obtain chatroom ID
+      const chRes = await fetch(`https://kick.com/api/v2/channels/${channel}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      if (!chRes.ok) {
+        throw new Error(`Failed to fetch Kick channel info (${chRes.status}): ${channel}`);
+      }
+      const chData: any = await chRes.json();
+      const chatroomId = chData?.chatroom?.id;
+      if (!chatroomId) {
+        throw new Error(`Kick chatroom ID not found for channel: ${channel}`);
+      }
+
+      // 2. Request guest auth token for Kick Centrifugo connection
+      const clientId = crypto.randomUUID();
+      const authRes = await fetch('https://web.kick.com/api/v1/realtime/auth/connection', {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://kick.com',
+          'Referer': `https://kick.com/${channel}`
+        },
+        body: JSON.stringify({ client_id: clientId })
+      });
+      const authData: any = await authRes.json();
+      const token = authData?.data?.token;
+
+      // 3. Connect to Kick Centrifugo WebSocket
+      const wsUrl = 'wss://realtime.us-east-1.platform.kick.com/connection/websocket';
+      this.ws = new WebSocket(wsUrl);
+      let msgId = 1;
+
+      this.ws.onopen = () => {
+        console.log(`[chat-tracker] Connected to Kick realtime WebSocket. Authenticating...`);
+        this.ws?.send(JSON.stringify({
+          id: msgId++,
+          connect: token ? { token } : {}
+        }));
+      };
+
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const raw = typeof event.data === 'string' ? event.data : event.data.toString();
+          const packet = JSON.parse(raw);
+
+          // Handle heartbeat frame
+          if (Object.keys(packet).length === 0) {
+            this.ws?.send(JSON.stringify({}));
+            return;
+          }
+
+          // On connect confirmation, subscribe to chatroom channel
+          if (packet.id === 1 && packet.connect) {
+            console.log(`[chat-tracker] Kick auth verified. Subscribing to chatrooms.${chatroomId}.v2...`);
+            this.ws?.send(JSON.stringify({
+              id: msgId++,
+              subscribe: {
+                channel: `chatrooms.${chatroomId}.v2`
+              }
+            }));
+            return;
+          }
+
+          // On publication frame: extract message
+          if (packet.push?.pub?.data) {
+            const pubData = packet.push.pub.data;
+            let msgObj = pubData;
+            if (pubData.event === 'App\\Events\\ChatMessageEvent' && typeof pubData.data === 'string') {
+              try { msgObj = JSON.parse(pubData.data); } catch {}
+            }
+
+            const author = msgObj?.sender?.username ?? 'viewer';
+            const text = msgObj?.content ?? (typeof msgObj === 'string' ? msgObj : '');
+            if (text) {
+              this.handleMessage({
+                author,
+                text,
+                timestampMs: Date.now()
+              });
+            }
+          }
+        } catch {
+          // Ignore malformed frame
+        }
+      };
+
+      this.ws.onerror = (err) => {
+        console.error('[chat-tracker] Kick WebSocket error:', err);
+      };
+
+      this.ws.onclose = () => {
+        if (this.isRunning) {
+          console.warn('[chat-tracker] Kick WebSocket disconnected — reconnecting in 5s...');
+          setTimeout(() => { if (this.isRunning) void this.startKick(); }, 5000);
+        }
+      };
+    } catch (err) {
+      console.error('[chat-tracker] Failed to start Kick chat tracker:', err);
     }
   }
 }

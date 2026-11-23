@@ -136,7 +136,7 @@ app.get('/api/live/status', (_req, res) => {
 
 app.post('/api/live/start', async (req, res) => {
   const { platform, channelOrUrl, vertical, layout, facecamPosition, spikeMultiplier, minSpikeThreshold } = req.body as {
-    platform: 'twitch' | 'youtube';
+    platform: 'twitch' | 'youtube' | 'kick';
     channelOrUrl: string;
     vertical?: boolean;
     layout?: 'split' | 'crop' | 'blur' | 'landscape';
@@ -146,7 +146,7 @@ app.post('/api/live/start', async (req, res) => {
   };
 
   if (!platform || !channelOrUrl) {
-    res.status(400).json({ error: 'platform ("twitch" or "youtube") and channelOrUrl are required' });
+    res.status(400).json({ error: 'platform ("twitch", "youtube", or "kick") and channelOrUrl are required' });
     return;
   }
 

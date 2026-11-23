@@ -28,4 +28,7 @@ db.exec(`
     status          TEXT NOT NULL DEFAULT 'READY',
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
+
+  INSERT OR IGNORE INTO ingest_jobs (id, source_url, status)
+  VALUES ('default', 'system', 'DONE');
 `);

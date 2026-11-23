@@ -56,6 +56,7 @@ export class LiveManager extends EventEmitter {
     // 1. Initialize rolling stream buffer
     this.buffer = new StreamBuffer({
       channelOrUrl: this.config.channelOrUrl,
+      platform: this.config.platform,
       quality: '720p60,720p,best',
       bufferWindowSec: 240, // 4-minute rolling buffer
     });
@@ -93,24 +94,55 @@ export class LiveManager extends EventEmitter {
 
   /**
    * Handles chat explosion event:
-   * Clips 10 seconds before and 10 seconds after the spike.
+   * - Starts exactly 10 seconds before the explosion spike: (T_spike - 10s).
+   * - Minimum duration: 20 seconds (ends at least T_spike + 10s).
+   * - Maximum duration: 40 seconds (ends at most T_spike + 30s).
+   * - Dynamically extends if chat hype remains elevated after the explosion.
+   * - Layout contains Facecam (split 9:16 layout: Facecam Top + Gameplay Bottom).
    */
   private handleExplosion(evt: ChatExplosionEvent): void {
     if (!this.buffer) return;
 
     const spikeTime = evt.timestampMs;
-    // Exactly 10s before and 10s after (20s total clip)
+    // Exactly 10s before the explosion
     const clipStartMs = spikeTime - 10_000;
-    const clipEndMs = spikeTime + 10_000;
+    const minEndMs = spikeTime + 10_000; // 20s total minimum duration
+    const maxEndMs = spikeTime + 30_000; // 40s total maximum duration
 
     console.log(
-      `[live-manager] 🎯 Scheduling clip extraction for spike at ${new Date(spikeTime).toLocaleTimeString()}` +
-      ` (Window: -10s to +10s)`
+      `[live-manager] 🎯 Chat explosion at ${new Date(spikeTime).toLocaleTimeString()}!` +
+      ` Tracking hype window: -10s start, 20s min to 40s max duration.`
     );
 
-    const delayMs = Math.max(1000, (clipEndMs + 3000) - Date.now());
+    // Dynamic hype tracker: check velocity after minEndMs has elapsed
+    const checkIntervalMs = 1000;
+    const pollHype = setInterval(async () => {
+      const now = Date.now();
 
-    setTimeout(async () => {
+      // Ensure minimum 20s window is reached before ending
+      if (now < minEndMs) return;
+
+      const currentVel = this.tracker?.currentVelocity ?? 0;
+      const baselineVel = this.tracker?.baselineVelocity ?? 1;
+      const hypeStillElevated = currentVel > (baselineVel * 1.3);
+
+      // Continue clip if hype is still rolling and within 40s max cap
+      if (hypeStillElevated && now < maxEndMs) {
+        console.log(`[live-manager] 🔥 Hype continues (${currentVel.toFixed(1)} msg/s) — extending clip...`);
+        return;
+      }
+
+      // Hype subsided or 40s cap reached -> finalize clip
+      clearInterval(pollHype);
+
+      const clipEndMs = Math.min(maxEndMs, Math.max(minEndMs, now - 1000));
+      const durationSec = Math.min(40, Math.max(20, (clipEndMs - clipStartMs) / 1000));
+
+      console.log(
+        `[live-manager] ✂ Extracting explosion clip: ${durationSec.toFixed(1)}s ` +
+        `(-10s pre-spike to +${((clipEndMs - spikeTime) / 1000).toFixed(1)}s post-spike)`
+      );
+
       try {
         if (!this.buffer) return;
 
@@ -167,18 +199,20 @@ export class LiveManager extends EventEmitter {
       } catch (err) {
         console.error('[live-manager] Failed to extract explosion clip:', err);
       }
-    }, delayMs);
+    }, checkIntervalMs);
   }
 
   /**
-   * Manual trigger: clip the last N seconds on demand.
+   * Manual trigger: clip the last N seconds on demand (enforced 20s min to 40s max).
    */
   public async manualClip(durationSec = 20): Promise<{ id: string; filePath: string }> {
     if (!this.buffer) throw new Error('No live buffer active. Click "Start Monitor" first!');
 
+    // Enforce 20s minimum and 40s maximum
+    const clampedDuration = Math.min(40, Math.max(20, durationSec));
     const now = Date.now();
     const clipEndMs = now - 1000;
-    const clipStartMs = clipEndMs - (durationSec * 1000);
+    const clipStartMs = clipEndMs - (clampedDuration * 1000);
 
     const cleanChannel = (this.config?.channelOrUrl ?? 'manual')
       .replace(/https?:\/\//, '')
@@ -207,7 +241,7 @@ export class LiveManager extends EventEmitter {
       clipId,
       jobId,
       title,
-      `Manual clip (${durationSec}s)`,
+      `Manual clip (${clampedDuration}s)`,
       0,
       result.durationSec,
       result.durationSec,

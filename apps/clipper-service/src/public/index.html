@@ -101,9 +101,10 @@
         <div class="form-row">
           <select id="livePlatform" style="width: 130px;">
             <option value="twitch" selected>Twitch</option>
+            <option value="kick">Kick</option>
             <option value="youtube">YouTube</option>
           </select>
-          <input type="text" id="liveChannel" placeholder="e.g. caseoh_ or https://youtube.com/live/..." style="flex: 1; min-width: 200px;">
+          <input type="text" id="liveChannel" placeholder="e.g. caseoh_, flaminhotmitts, or stream URL" style="flex: 1; min-width: 200px;">
           <select id="liveLayout" style="width: 230px;" onchange="toggleFacecamPos(this.value)">
             <option value="split" selected>📱 Split: Facecam + Game (9:16)</option>
             <option value="crop">📱 9:16 Center Crop</option>
@@ -139,13 +140,13 @@
           <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Spike Multiplier: 2.5x</div>
         </div>
         <div class="metric-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center;">
-          <button class="btn btn-red" style="width: 100%; padding: 14px;" onclick="triggerManualClip()">💥 Clip Last 20s Now</button>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Manual override instant cut</div>
+          <button class="btn btn-red" style="width: 100%; padding: 14px;" onclick="triggerManualClip()">💥 Clip Last 20s–40s Now</button>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Manual override instant cut (20s min)</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title">Recent Chat Explosion Triggers (-10s to +10s)</div>
+        <div class="card-title">Recent Chat Explosion Triggers (10s Pre-Spike • 20s–40s Duration)</div>
         <div id="liveClipsList" style="color: var(--text-muted); font-size: 14px;">No explosions caught in this session yet. Waiting for chat to explode...</div>
       </div>
     </div>
