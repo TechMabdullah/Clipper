@@ -6,6 +6,7 @@
     "clipper": "tsx --env-file=.env.local apps/clipper-service/src/index.ts",
     "notify":  "tsx --env-file=.env.local apps/notification-service/src/index.ts",
     "live":    "tsx --env-file=.env.local apps/clipper-service/src/live/cli.ts",
+    "tui":     "python clipper_tui.py",
     "dev":     "concurrently \"pnpm clipper\" \"pnpm notify\"",
     "build":   "nx run-many -t build",
     "lint":    "nx run-many -t lint",

@@ -145,6 +145,58 @@ All video processing, stream rolling buffers, OpenCV facial tracking, and databa
 
 ---
 
+## 💻 Python Terminal UI (TUI) & CLI Control
+
+In addition to the Web Dashboard, Clipper Studio includes an interactive **Terminal User Interface (TUI)** and Python CLI tool powered by `rich`:
+
+### Launching the Interactive TUI:
+
+```bash
+# Via pnpm
+pnpm tui
+
+# Or direct Python
+python clipper_tui.py
+
+# Or via Windows double-click batch launcher
+clipper.bat
+```
+
+### Hotkeys & Controls inside TUI:
+
+| Key | Action |
+|:---:|:---|
+| `[S]` | **Start Monitor**: Interactive prompt to pick Twitch/Kick/YouTube, channel, layout & facecam |
+| `[X]` | **Stop Monitor**: Ends the active stream capture and chat tracking session |
+| `[SPACE]` or `[C]` | **Instant Clip**: Immediately extracts the last 20 seconds to `D:\ClipperMedia\03_clips` |
+| `[L]` | **Cycle Layout**: Toggle between Split Shorts, Split Action, Center Crop, Blur, Landscape |
+| `[F]` | **Cycle Facecam**: Toggle between Auto-Detect, Top-Left, Top-Right, Bottom-Left, Bottom-Right |
+| `[G]` | **Clips Gallery**: Browse rendered clips, press `Enter` to open in media player, or `e` to reveal in Explorer |
+| `[Q]` | **Quit**: Cleanly exit the TUI |
+
+### CLI Non-Interactive Automation Flags:
+
+You can also automate Clipper Studio from scripts or PowerShell using direct CLI flags:
+
+```bash
+# Check current live monitoring status & chat velocity
+python clipper_tui.py --status
+
+# Start monitoring a stream directly
+python clipper_tui.py --start --platform kick --channel iceposeidon --layout split --facecam auto
+
+# Stop the current monitoring session
+python clipper_tui.py --stop
+
+# Trigger a manual clip (20s to 40s)
+python clipper_tui.py --clip 20
+
+# View all rendered clips in a formatted terminal table
+python clipper_tui.py --clips
+```
+
+---
+
 ## 📡 REST API Reference
 
 The service exposes a complete HTTP REST API for automation and integrations:
