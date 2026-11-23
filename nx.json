@@ -20,7 +20,5 @@
     "typecheck": { "cache": true },
     "test": { "cache": true }
   },
-  "plugins": [
-    { "plugin": "@nx/node/plugin", "options": { "serveTargetName": "serve" } }
-  ]
+  "plugins": []
 }
