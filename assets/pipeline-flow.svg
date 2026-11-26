@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 156" width="1120" height="156" role="img" aria-label="Clipper Studio Architecture Flow">
+  <rect width="1120" height="156" rx="22" fill="#141423" stroke="#2D2D4C"/>
+
+  <!-- Node 1 -->
+  <rect x="24" y="28" width="230" height="100" rx="18" fill="#1E1E36" stroke="#6C63FF" stroke-width="1.5"/>
+  <text x="139" y="64" text-anchor="middle" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="800">Next.js 15 (:3000)</text>
+  <text x="139" y="88" text-anchor="middle" fill="#A5A8C8" font-family="Inter, Segoe UI, sans-serif" font-size="12">Customer SaaS &amp; /admin</text>
+  <text x="139" y="106" text-anchor="middle" fill="#6C63FF" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">Doodle Auth • Lenis • RBAC</text>
+
+  <!-- Connector 1 -> 2 with moving pulse -->
+  <line x1="254" y1="78" x2="314" y2="78" stroke="#6C63FF" stroke-width="2.5" stroke-dasharray="5 5"/>
+  <circle cx="254" cy="78" r="5" fill="#FFD43B">
+    <animate attributeName="cx" values="258;310;258" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Node 2 -->
+  <rect x="314" y="28" width="230" height="100" rx="18" fill="#1E1E36" stroke="#FF8A30" stroke-width="1.5"/>
+  <text x="429" y="64" text-anchor="middle" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="800">Firebase + Resend</text>
+  <text x="429" y="88" text-anchor="middle" fill="#A5A8C8" font-family="Inter, Segoe UI, sans-serif" font-size="12">6-Digit OTP • Admin TOTP</text>
+  <text x="429" y="106" text-anchor="middle" fill="#FF8A30" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">Firestore + Upstash Limit</text>
+
+  <!-- Connector 2 -> 3 -->
+  <line x1="544" y1="78" x2="604" y2="78" stroke="#FF8A30" stroke-width="2.5" stroke-dasharray="5 5"/>
+  <circle cx="544" cy="78" r="5" fill="#FF5FA2">
+    <animate attributeName="cx" values="548;600;548" dur="2s" begin="0.4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Node 3 -->
+  <rect x="604" y="28" width="230" height="100" rx="18" fill="#1E1E36" stroke="#FF5FA2" stroke-width="1.5"/>
+  <text x="719" y="64" text-anchor="middle" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="800">Stripe Checkout</text>
+  <text x="719" y="88" text-anchor="middle" fill="#A5A8C8" font-family="Inter, Segoe UI, sans-serif" font-size="12">Plans • Portal • PDF Invoices</text>
+  <text x="719" y="106" text-anchor="middle" fill="#FF5FA2" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">HMAC Webhooks (/api/webhooks/stripe)</text>
+
+  <!-- Connector 3 -> 4 -->
+  <line x1="834" y1="78" x2="894" y2="78" stroke="#34D399" stroke-width="2.5" stroke-dasharray="5 5"/>
+  <circle cx="834" cy="78" r="5" fill="#34D399">
+    <animate attributeName="cx" values="838;890;838" dur="2s" begin="0.8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Node 4 -->
+  <rect x="894" y="28" width="202" height="100" rx="18" fill="#1E1E36" stroke="#34D399" stroke-width="1.5"/>
+  <text x="995" y="64" text-anchor="middle" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="800">Clip Engine (:4001)</text>
+  <text x="995" y="88" text-anchor="middle" fill="#A5A8C8" font-family="Inter, Segoe UI, sans-serif" font-size="12">FFmpeg • OpenCV • yt-dlp</text>
+  <text x="995" y="106" text-anchor="middle" fill="#34D399" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">Local SQLite + Media Bridge</text>
+</svg>

@@ -108,7 +108,7 @@ function printUpgradeNotice(err: unknown): boolean {
     const e = err as { message?: string; code?: string; requiredPlan?: string };
     const planLabel = (e.requiredPlan ?? 'pro').toUpperCase();
     console.error(`\n💳 [402 UPGRADE REQUIRED — ${planLabel}] ${e.message ?? 'Plan upgrade required.'}`);
-    console.error('   Activate your Kelviq license key in the Web Dashboard or Admin Console (/admin).\n');
+    console.error('   Subscribe via Stripe Checkout or activate a VIP key in the Web Dashboard (/billing).\n');
     return true;
   }
   return false;

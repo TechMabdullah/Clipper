@@ -124,9 +124,9 @@
     <div id="currentPlanBadgeWrap"></div>
   </div>
 
-  <!-- Optional customer email for Kelviq checkout -->
+  <!-- Optional customer email for Stripe Checkout -->
   <div class="checkout-email-bar">
-    <label for="checkoutEmailInput">📧 Optional Customer Email (pre-fills Kelviq checkout &amp; receipt):</label>
+    <label for="checkoutEmailInput">📧 Optional Customer Email (pre-fills Stripe Checkout &amp; receipt):</label>
     <input type="email" id="checkoutEmailInput" placeholder="creator@example.com" autocomplete="email">
   </div>
 
@@ -139,7 +139,7 @@
   <!-- License key activation -->
   <div class="activate-section">
     <h2>🔑 Already purchased? Activate your license</h2>
-    <p>Enter the license key that was emailed to you after your Kelviq payment.</p>
+    <p>Enter the license key that was emailed to you or your Stripe Subscription ID (sub_.../cs_...) after checkout.</p>
     <div class="input-row">
       <input type="text" id="licenseKeyInput" placeholder="CLIP-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
       <button type="button" class="btn-sm" id="activateBtn">Activate</button>
@@ -153,12 +153,12 @@
 
     <div class="faq-item" data-faq>
       <div class="faq-q">What payment methods are supported? <span class="faq-arrow">▾</span></div>
-      <div class="faq-a">Clipper Studio uses <strong>Kelviq</strong> as the payment processor, which supports credit/debit cards (Visa, Mastercard, Amex), and many local Pakistani payment methods including Easypaisa and JazzCash. Payments are charged in USD at the prevailing PKR exchange rate.</div>
+      <div class="faq-a">Clipper Studio uses <strong>Stripe</strong> as the payment processor, supporting global Visa/Mastercard/Amex, Apple Pay, Google Pay, and Link.</div>
     </div>
 
     <div class="faq-item" data-faq>
       <div class="faq-q">How do I get my license key after paying? <span class="faq-arrow">▾</span></div>
-      <div class="faq-a">After completing the Kelviq checkout, your license key is emailed to you within 1–5 minutes. Paste it into the "Activate your license" box above. If you don't receive it after 10 minutes, check your spam folder or contact support.</div>
+      <div class="faq-a">Your subscription unlocks automatically via Stripe Checkout or webhook! You can also paste your Stripe Checkout Session ID (<code>cs_...</code>) or Subscription ID (<code>sub_...</code>) above.</div>
     </div>
 
     <div class="faq-item" data-faq>
@@ -168,7 +168,7 @@
 
     <div class="faq-item" data-faq>
       <div class="faq-q">Is there a refund policy? <span class="faq-arrow">▾</span></div>
-      <div class="faq-a">Yes — 7-day money-back guarantee. If Clipper Studio doesn't work for your setup, contact us within 7 days of purchase for a full refund through Kelviq.</div>
+      <div class="faq-a">Yes — 7-day money-back guarantee. If Clipper Studio doesn't work for your setup, contact us within 7 days of purchase for a full refund via Stripe.</div>
     </div>
 
     <div class="faq-item" data-faq>
@@ -211,7 +211,7 @@
     <div class="msg" id="updaterMsg"></div>
   </div>
 
-  <p class="footer-note">Payments processed securely by <a href="https://kelviq.com" target="_blank" rel="noopener noreferrer">Kelviq</a> — Merchant of Record for Pakistan &amp; global.</p>
+  <p class="footer-note">Payments processed securely by <a href="https://stripe.com" target="_blank" rel="noopener noreferrer">Stripe</a> — Global Subscription Billing.</p>
 
 <script>
 (function () {
@@ -459,7 +459,7 @@
 
     return {
       url: '',
-      error: chkData?.error || linkData?.error || 'No payment link or Kelviq checkout configured for this plan yet. Set it in /admin.',
+      error: chkData?.error || linkData?.error || 'No payment link or Stripe Checkout configured for this plan yet. Set it in /admin.',
     };
   }
 

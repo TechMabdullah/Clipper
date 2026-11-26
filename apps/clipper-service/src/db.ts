@@ -44,8 +44,8 @@ db.exec(`
     allow_virality_ai       INTEGER NOT NULL DEFAULT 0,
     allow_watchlist         INTEGER NOT NULL DEFAULT 0,
     allow_custom_branding   INTEGER NOT NULL DEFAULT 0,
-    kelviq_payment_link     TEXT NOT NULL DEFAULT '',
-    kelviq_plan_identifier  TEXT NOT NULL DEFAULT '',
+    stripe_payment_link     TEXT NOT NULL DEFAULT '',
+    stripe_price_id         TEXT NOT NULL DEFAULT '',
     updated_at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -72,7 +72,7 @@ db.exec(`
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
-  CREATE TABLE IF NOT EXISTS kelviq_events (
+  CREATE TABLE IF NOT EXISTS stripe_events (
     id               TEXT PRIMARY KEY,
     event_type       TEXT NOT NULL,
     customer_email   TEXT NOT NULL DEFAULT '',
@@ -134,12 +134,35 @@ for (const [col, def] of migrations) {
   }
 }
 
+// Migrate legacy kelviq columns/events safely if upgrading an existing SQLite DB
+const existingPlanCols = new Set(
+  (db.prepare('PRAGMA table_info(plans)').all() as Array<{ name: string }>).map((c) => c.name),
+);
+if (!existingPlanCols.has('stripe_payment_link')) {
+  db.exec(`ALTER TABLE plans ADD COLUMN stripe_payment_link TEXT NOT NULL DEFAULT ''`);
+  if (existingPlanCols.has('kelviq_payment_link')) {
+    db.exec(`UPDATE plans SET stripe_payment_link = kelviq_payment_link WHERE stripe_payment_link = ''`);
+  }
+}
+if (!existingPlanCols.has('stripe_price_id')) {
+  db.exec(`ALTER TABLE plans ADD COLUMN stripe_price_id TEXT NOT NULL DEFAULT ''`);
+  if (existingPlanCols.has('kelviq_plan_identifier')) {
+    db.exec(`UPDATE plans SET stripe_price_id = kelviq_plan_identifier WHERE stripe_price_id = ''`);
+  }
+}
+const hasLegacyEvents = db
+  .prepare(`SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='kelviq_events'`)
+  .get() as { found: number } | undefined;
+if (hasLegacyEvents) {
+  db.exec(`INSERT OR IGNORE INTO stripe_events SELECT * FROM kelviq_events`);
+}
+
 // Seed default Free, Pro, Ultra plans (editable inside Admin Dashboard)
 const upsertDefaultPlan = db.prepare(`
   INSERT OR IGNORE INTO plans (
     id, name, tagline, price_usd, billing_period, daily_clip_limit, max_resolution,
     watermark_enabled, allow_auto_captions, allow_audio_peak, allow_virality_ai,
-    allow_watchlist, allow_custom_branding, kelviq_payment_link, kelviq_plan_identifier
+    allow_watchlist, allow_custom_branding, stripe_payment_link, stripe_price_id
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
@@ -175,8 +198,8 @@ upsertDefaultPlan.run(
   1,
   0,
   0,
-  process.env.KELVIQ_PRO_PAYMENT_LINK ?? '',
-  process.env.KELVIQ_PRO_PLAN_ID ?? 'pro'
+  process.env.STRIPE_PRO_PAYMENT_LINK ?? '',
+  process.env.STRIPE_PRO_PRICE_ID ?? 'pro'
 );
 
 upsertDefaultPlan.run(
@@ -193,25 +216,25 @@ upsertDefaultPlan.run(
   1,
   1,
   1,
-  process.env.KELVIQ_ULTRA_PAYMENT_LINK ?? '',
-  process.env.KELVIQ_ULTRA_PLAN_ID ?? 'ultra'
+  process.env.STRIPE_ULTRA_PAYMENT_LINK ?? '',
+  process.env.STRIPE_ULTRA_PRICE_ID ?? 'ultra'
 );
 
 // Backfill empty payment links when env vars are populated after initial seeding
-const envProPaymentLink = (process.env.KELVIQ_PRO_PAYMENT_LINK ?? '').trim();
+const envProPaymentLink = (process.env.STRIPE_PRO_PAYMENT_LINK ?? '').trim();
 if (envProPaymentLink) {
   db.prepare(`
     UPDATE plans
-    SET kelviq_payment_link = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-    WHERE id = 'pro' AND (kelviq_payment_link IS NULL OR TRIM(kelviq_payment_link) = '')
+    SET stripe_payment_link = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+    WHERE id = 'pro' AND (stripe_payment_link IS NULL OR TRIM(stripe_payment_link) = '')
   `).run(envProPaymentLink);
 }
-const envUltraPaymentLink = (process.env.KELVIQ_ULTRA_PAYMENT_LINK ?? '').trim();
+const envUltraPaymentLink = (process.env.STRIPE_ULTRA_PAYMENT_LINK ?? '').trim();
 if (envUltraPaymentLink) {
   db.prepare(`
     UPDATE plans
-    SET kelviq_payment_link = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-    WHERE id = 'ultra' AND (kelviq_payment_link IS NULL OR TRIM(kelviq_payment_link) = '')
+    SET stripe_payment_link = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+    WHERE id = 'ultra' AND (stripe_payment_link IS NULL OR TRIM(stripe_payment_link) = '')
   `).run(envUltraPaymentLink);
 }
 
@@ -264,10 +287,10 @@ function seedSettingIfMissing(key: string, value: string): void {
 
 seedSettingIfMissing('admin_password_hash', hashPassword(process.env.ADMIN_PASSWORD ?? 'admin123'));
 seedSettingIfMissing('admin_session_secret', crypto.randomBytes(32).toString('hex'));
-seedSettingIfMissing('kelviq_access_token', process.env.KELVIQ_API_KEY ?? '');
-seedSettingIfMissing('kelviq_environment', process.env.KELVIQ_ENV ?? 'production');
-seedSettingIfMissing('kelviq_webhook_secret', process.env.KELVIQ_WEBHOOK_SECRET ?? '');
-seedSettingIfMissing('kelviq_portal_url', process.env.KELVIQ_PORTAL_URL ?? '');
+seedSettingIfMissing('stripe_secret_key', process.env.STRIPE_SECRET_KEY ?? '');
+seedSettingIfMissing('stripe_publishable_key', process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '');
+seedSettingIfMissing('stripe_webhook_secret', process.env.STRIPE_WEBHOOK_SECRET ?? '');
+seedSettingIfMissing('stripe_portal_url', process.env.STRIPE_PORTAL_URL ?? '');
 seedSettingIfMissing('default_watermark_text', 'Clipper Studio');
 
 export interface InsertClipParams {

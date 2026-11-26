@@ -30,6 +30,8 @@ jobs:
       - run: pnpm install --frozen-lockfile --allow-build esbuild --allow-build nx
 
       - name: Build & Typecheck Monorepo
+        env:
+          SKIP_ENV_VALIDATION: '1'
         run: pnpm nx run-many -t build typecheck
 
       - name: Run Automated Test Suite
@@ -45,7 +47,7 @@ jobs:
           if (!/^LLM_API_KEY=""$/m.test(envExample)) {
             throw new Error('.env.example must keep LLM_API_KEY=""');
           }
-          for (const match of envExample.matchAll(/^(LLM_API_KEY|GEMINI_API_KEY|OPENAI_API_KEY|GROQ_API_KEY|KELVIQ_API_KEY|KELVIQ_WEBHOOK_SECRET)=(.*)$/gm)) {
+          for (const match of envExample.matchAll(/^(LLM_API_KEY|GEMINI_API_KEY|OPENAI_API_KEY|GROQ_API_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|FIREBASE_PRIVATE_KEY|FIREBASE_SERVICE_ACCOUNT_JSON|OTP_HMAC_SECRET|ADMIN_TOTP_ENCRYPTION_KEY|INTERNAL_BRIDGE_SECRET|RESEND_API_KEY|UPSTASH_REDIS_REST_TOKEN)=(.*)$/gm)) {
             const val = match[2].split('#')[0].trim();
             if (val !== '""' && val !== '') {
               throw new Error(`Secret key ${match[1]} must be empty in .env.example`);

@@ -5,13 +5,14 @@
   "scripts": {
     "clipper": "tsx --env-file=.env.local apps/clipper-service/src/index.ts",
     "notify": "tsx --env-file=.env.local apps/notification-service/src/index.ts",
+    "web": "pnpm --filter @clipper/web dev",
     "live": "tsx --env-file=.env.local apps/clipper-service/src/live/cli.ts",
     "tui": "python clipper_tui.py",
-    "dev": "concurrently \"pnpm clipper\" \"pnpm notify\"",
+    "dev": "concurrently \"pnpm clipper\" \"pnpm notify\" \"pnpm web\"",
     "build": "nx run-many -t build",
     "lint": "nx run-many -t lint",
     "typecheck": "nx run-many -t typecheck",
-    "test": "node --import tsx --test apps/clipper-service/src/app.test.ts"
+    "test": "node --import tsx --test apps/clipper-service/src/app.test.ts apps/web/src/lib/web-security.test.ts"
   },
   "devDependencies": {
     "@nx/eslint": "^20.0.0",

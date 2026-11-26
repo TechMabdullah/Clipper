@@ -14,7 +14,7 @@ type LicensingModule = typeof import('./licensing.js');
 type StudioModule = typeof import('./studio.js');
 type AudioPeaksModule = typeof import('./features/audio-peaks.js');
 type HighlightPickerModule = typeof import('./highlight-picker.js');
-type KelviqSdkModule = typeof import('@kelviq/node-sdk');
+type StripeModule = typeof import('stripe');
 type ClipCommentsModule = typeof import('./features/clip-comments.js');
 type ClipShareModule = typeof import('./features/clip-share.js');
 type AbTestingModule = typeof import('./features/ab-testing.js');
@@ -136,7 +136,7 @@ describe('Unit & DB Security Tests', () => {
   let studioMod: StudioModule;
   let audioPeaksMod: AudioPeaksModule;
   let highlightPickerMod: HighlightPickerModule;
-  let kelviqSdkMod: KelviqSdkModule;
+  let stripeMod: StripeModule;
   let clipCommentsMod: ClipCommentsModule;
   let clipShareMod: ClipShareModule;
   let abTestingMod: AbTestingModule;
@@ -149,9 +149,9 @@ describe('Unit & DB Security Tests', () => {
     process.env.MEDIA_ROOT_DIR = path.join(tmpDir, 'media');
     process.env.LLM_PROVIDER = 'mock';
     process.env.ADMIN_PASSWORD = 'unit-test-admin-pass-2026';
-    process.env.KELVIQ_WEBHOOK_SECRET = '';
-    process.env.KELVIQ_API_KEY = '';
-    delete process.env.KELVIQ_ALLOW_UNSIGNED_WEBHOOKS;
+    process.env.STRIPE_WEBHOOK_SECRET = '';
+    process.env.STRIPE_SECRET_KEY = '';
+    delete process.env.STRIPE_ALLOW_UNSIGNED_WEBHOOKS;
 
     dbMod = await import('./db.js');
     storageMod = await import('./storage.js');
@@ -159,7 +159,8 @@ describe('Unit & DB Security Tests', () => {
     studioMod = await import('./studio.js');
     audioPeaksMod = await import('./features/audio-peaks.js');
     highlightPickerMod = await import('./highlight-picker.js');
-    kelviqSdkMod = await import('@kelviq/node-sdk');
+    // @ts-ignore
+    stripeMod = await import('stripe'); void stripeMod;
     clipCommentsMod = await import('./features/clip-comments.js');
     clipShareMod = await import('./features/clip-share.js');
     abTestingMod = await import('./features/ab-testing.js');
@@ -263,7 +264,7 @@ describe('Unit & DB Security Tests', () => {
     assert.equal(dbMod.listScheduledJobs().some((j) => j.id === job.id), false);
   });
 
-  it('masks/redacts license keys and rejects unsigned Kelviq webhooks', () => {
+  it('masks/redacts license keys and rejects unsigned Stripe webhooks', () => {
     assert.equal(licensingMod.maskLicenseKeyValue(''), '');
     assert.equal(licensingMod.maskLicenseKeyValue('shortkey'), '***');
     assert.equal(licensingMod.maskLicenseKeyValue('CLIP-PRO-1234-5678-ABCD'), 'CLIP-PRO...ABCD');
@@ -283,8 +284,8 @@ describe('Unit & DB Security Tests', () => {
     assert.equal(redacted.nested.customer, 'creator@example.com');
 
     assert.throws(
-      () => licensingMod.handleKelviqWebhook(JSON.stringify({ type: 'license.activated', data: {} }), {}),
-      (err) => err instanceof kelviqSdkMod.WebhookVerificationError,
+      () => licensingMod.handleStripeWebhook(JSON.stringify({ type: 'checkout.session.completed', data: { object: {} } }), {}),
+      (err) => err instanceof licensingMod.StripeWebhookVerificationError,
     );
   });
 
@@ -652,9 +653,9 @@ describe('Live HTTP Server Integration Tests', () => {
         ADMIN_PASSWORD: TEST_ADMIN_PASSWORD,
         REQUIRE_API_KEY: 'false',
         LLM_PROVIDER: 'mock',
-        KELVIQ_API_KEY: '',
-        KELVIQ_WEBHOOK_SECRET: '',
-        KELVIQ_ALLOW_UNSIGNED_WEBHOOKS: 'false',
+        STRIPE_SECRET_KEY: '',
+        STRIPE_WEBHOOK_SECRET: '',
+        STRIPE_ALLOW_UNSIGNED_WEBHOOKS: 'false',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -868,8 +869,8 @@ describe('Live HTTP Server Integration Tests', () => {
     assert.equal(billingRes.status, 403);
   });
 
-  it('rejects Kelviq webhooks with 403 when webhook secret is unconfigured', async () => {
-    const res = await requestJson(baseUrl, '/api/webhooks/kelviq', {
+  it('rejects Stripe webhooks with 403 when webhook secret is unconfigured', async () => {
+    const res = await requestJson(baseUrl, '/api/webhooks/stripe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'license.activated', data: {} }),

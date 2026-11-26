@@ -113,7 +113,7 @@
   <div id="loginView" class="login-wrap" style="display: none;">
     <div class="login-card">
       <h1>🛡️ Admin Console</h1>
-      <p>Protected management portal for Kelviq Billing, Plan Pricing, License Keys, API Keys, and System Analytics.</p>
+      <p>Protected management portal for Stripe Billing, Plan Pricing, License Keys, API Keys, and System Analytics.</p>
       <label class="lbl">Administrator Password</label>
       <input type="password" id="adminPasswordInput" placeholder="Enter admin password">
       <div style="font-size: 11px; color: var(--muted); margin-top: 8px;">
@@ -132,7 +132,7 @@
     <div class="topbar">
       <div class="topbar-left">
         <strong style="font-size: 18px;">🛡️ Clipper Studio Admin</strong>
-        <span class="badge">KELVIQ MERCHANT CONSOLE</span>
+        <span class="badge">STRIPE BILLING CONSOLE</span>
       </div>
       <div style="display: flex; gap: 10px;">
         <a href="/" class="btn btn-sec btn-sm">🎬 Creator Dashboard</a>
@@ -172,9 +172,9 @@
           <div class="kpi-sub" id="admDailyUsage">0 rendered today</div>
         </div>
         <div class="kpi">
-          <div class="kpi-label">Kelviq Events Logged</div>
+          <div class="kpi-label">Stripe Events Logged</div>
           <div class="kpi-val" id="admEventsCount">0</div>
-          <div class="kpi-sub" id="admKelviqStatus">Kelviq Status: —</div>
+          <div class="kpi-sub" id="admStripeStatus">Stripe Status: —</div>
         </div>
         <div class="kpi">
           <div class="kpi-label">Media Storage Mode</div>
@@ -307,29 +307,26 @@
       <!-- Editable Paid Plans (FREE / PRO / ULTRA) -->
       <div class="section-card">
         <div class="section-title">
-          <span>💎 Paid Tiers, Quotas &amp; Kelviq Payment Links</span>
+          <span>💎 Paid Tiers, Quotas &amp; Stripe Payment Links</span>
           <span style="font-size: 12px; font-weight: normal; color: var(--muted);">Edit prices, daily quotas (-1 = unlimited), feature access, and Kelviq links directly</span>
         </div>
         <div id="plansEditorGrid" class="plans-grid"></div>
       </div>
 
-      <!-- Kelviq API Settings + VIP Key Generator -->
+      <!-- Stripe API Settings + VIP Key Generator -->
       <div class="two-col">
         <div class="section-card">
           <div class="section-title">
-            <span>⚡ Kelviq Integration &amp; Security</span>
-            <button type="button" id="btnTestKelviq" class="btn btn-sec btn-sm">🔌 Test Kelviq API</button>
+            <span>⚡ Stripe Integration &amp; Security</span>
+            <button type="button" id="btnTestStripe" class="btn btn-sec btn-sm">🔌 Test Stripe API</button>
           </div>
-          <label class="lbl">Kelviq API Key (Server / Client Access Token)</label>
-          <input type="password" id="setKelviqToken" placeholder="Enter Kelviq API key (leave masked to keep existing)">
+          <label class="lbl">Stripe Secret Key (sk_test_... / sk_live_...)</label>
+          <input type="password" id="setStripeSecretKey" placeholder="Enter Stripe sk_... secret (leave masked to keep existing)">
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div>
-              <label class="lbl">Kelviq Environment</label>
-              <select id="setKelviqEnv">
-                <option value="production">Production (api.kelviq.com)</option>
-                <option value="sandbox">Sandbox (sandboxapi.kelviq.com)</option>
-              </select>
+              <label class="lbl">Stripe Publishable Key (pk_test_...)</label>
+              <input type="text" id="setStripePubKey" placeholder="pk_test_... or pk_live_...">
             </div>
             <div>
               <label class="lbl">Default Watermark Text</label>
@@ -338,24 +335,24 @@
           </div>
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; margin-bottom:4px; gap:8px; flex-wrap:wrap;">
-            <label class="lbl" style="margin:0;">Kelviq Webhook Secret (<code>kq_whsec_...</code>)</label>
+            <label class="lbl" style="margin:0;">Stripe Webhook Secret (<code>whsec_...</code>)</label>
             <span id="webhookSecretStatusBadge" class="badge badge-muted" style="font-size:10px;">Not Configured</span>
           </div>
-          <input type="password" id="setKelviqWebhookSecret" placeholder="Enter kq_whsec_... (leave blank to keep existing)">
+          <input type="password" id="setStripeWebhookSecret" placeholder="Enter whsec_... (leave blank to keep existing)">
           <label id="clearWebhookSecretWrap" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:6px; cursor:pointer;">
             <input type="checkbox" id="clearWebhookSecretCheckbox" style="accent-color: var(--red);">
             <span>Clear existing saved webhook secret</span>
           </label>
 
-          <label class="lbl">Kelviq Customer Portal URL (Optional)</label>
-          <input type="text" id="setKelviqPortalUrl" placeholder="https://portal.kelviq.com/...">
+          <label class="lbl">Stripe Customer Portal URL (Optional)</label>
+          <input type="text" id="setStripePortalUrl" placeholder="https://billing.stripe.com/p/login/...">
 
           <label class="lbl" for="setNewAdminPass">Change Admin Password (Optional)</label>
           <input type="password" id="setNewAdminPass" placeholder="Min 8 characters to update">
 
           <div style="margin-top: 12px; padding: 10px; background: #121217; border-radius: 8px; font-size: 12px; color: var(--muted);">
-            Webhook URL to register in Kelviq Dashboard:<br>
-            <code id="webhookEndpointDisplay">http://localhost:4001/api/webhooks/kelviq</code>
+            Webhook URL to register in Stripe Dashboard:<br>
+            <code id="webhookEndpointDisplay">http://localhost:4001/api/webhooks/stripe</code>
           </div>
 
           <div id="adminSettingsError" class="error-banner"></div>
@@ -366,7 +363,7 @@
         <div class="section-card">
           <div class="section-title">🔑 Generate Override / VIP License Key</div>
           <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-            Automated payments route directly through Kelviq checkout &amp; email. Use this generator anytime you want to issue an instant manual VIP/support key.
+            Automated payments route directly through Stripe Checkout &amp; billing portal. Use this generator anytime you want to issue an instant manual VIP/support key.
           </p>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div>
@@ -384,7 +381,7 @@
           <label class="lbl">Customer Email (Optional)</label>
           <input type="text" id="genKeyEmail" placeholder="creator@example.com">
           <label class="lbl">Internal Note</label>
-          <input type="text" id="genKeyNote" placeholder="e.g. Manual bank / Kelviq VIP">
+          <input type="text" id="genKeyNote" placeholder="e.g. Manual bank / VIP comp">
 
           <button type="button" id="btnGenerateVipKey" class="btn btn-green" style="margin-top: 14px; width: 100%; justify-content: center;">✨ Generate Key</button>
 
@@ -493,10 +490,10 @@
         </div>
       </div>
 
-      <!-- Kelviq Checkout & Activation Webhook Logs -->
+      <!-- Stripe Checkout & Activation Webhook Logs -->
       <div class="section-card">
         <div class="section-title">
-          <span>🧾 Kelviq Purchases, Activations &amp; Webhook Events</span>
+          <span>🧾 Stripe Purchases, Subscriptions &amp; Webhook Events</span>
           <button type="button" id="btnRefreshEventLog" class="btn btn-sec btn-sm">🔄 Refresh Events</button>
         </div>
         <div style="overflow-x: auto;">
@@ -512,8 +509,8 @@
                 <th>Payload</th>
               </tr>
             </thead>
-            <tbody id="kelviqEventsBody">
-              <tr><td colspan="7" style="color: var(--muted);">No Kelviq webhook or activation events yet.</td></tr>
+            <tbody id="stripeEventsBody">
+              <tr><td colspan="7" style="color: var(--muted);">No Stripe webhook or subscription events yet.</td></tr>
             </tbody>
           </table>
         </div>
@@ -721,7 +718,7 @@
       }
 
       const hmacBadge = document.getElementById('postureWebhookHmac');
-      if (settings?.kelviqWebhookSecretConfigured) {
+      if (settings?.stripeWebhookSecretConfigured) {
         hmacBadge.innerText = '✅ Webhook HMAC: Active';
         hmacBadge.className = 'badge badge-ok';
       } else {
@@ -748,20 +745,20 @@
         document.getElementById('admTotalClips').innerText = d.analytics?.totalClips ?? 0;
         document.getElementById('admDailyUsage').innerText = `${d.analytics?.dailyClipCount ?? 0} clips today • Avg Virality ${d.analytics?.avgVirality ?? 0}/100`;
         document.getElementById('admEventsCount').innerText = Array.isArray(d.events) ? d.events.length : 0;
-        document.getElementById('admKelviqStatus').innerText = d.settings?.kelviqTokenConfigured
-          ? `Connected (${d.settings.kelviqEnvironment})`
+        document.getElementById('admStripeStatus').innerText = d.settings?.stripeKeyConfigured
+          ? `Connected (${d.settings.stripeMode})`
           : 'API Key not set yet';
         document.getElementById('admStorageMode').innerText = d.storage?.isSingleDisk ? 'Single-Disk' : 'Secondary Disk';
         document.getElementById('admStorageRoot').innerText = d.storage?.mediaRoot || '—';
-        document.getElementById('webhookEndpointDisplay').innerText = `${location.origin}/api/webhooks/kelviq`;
+        document.getElementById('webhookEndpointDisplay').innerText = `${location.origin}/api/webhooks/stripe`;
 
         // Settings fields
-        document.getElementById('setKelviqToken').value = d.settings?.kelviqTokenMasked || '';
-        document.getElementById('setKelviqEnv').value = d.settings?.kelviqEnvironment || 'production';
-        document.getElementById('setKelviqWebhookSecret').value = '';
-        document.getElementById('setKelviqPortalUrl').value = d.settings?.kelviqPortalUrl || '';
+        document.getElementById('setStripeSecretKey').value = d.settings?.stripeKeyMasked || '';
+        document.getElementById('setStripePubKey').value = d.settings?.stripePublishableKey || '';
+        document.getElementById('setStripeWebhookSecret').value = '';
+        document.getElementById('setStripePortalUrl').value = d.settings?.stripePortalUrl || '';
         document.getElementById('setWatermarkText').value = d.settings?.defaultWatermarkText || 'Clipper Studio';
-        updateWebhookSecretBadge(Boolean(d.settings?.kelviqWebhookSecretConfigured));
+        updateWebhookSecretBadge(Boolean(d.settings?.stripeWebhookSecretConfigured));
         updateSecurityPosture(d.settings || {});
 
         cachedPlans = Array.isArray(d.plans) ? d.plans : [];
@@ -877,11 +874,11 @@
               </div>
             </div>
 
-            <label class="lbl">Kelviq Payment Link URL</label>
-            <input type="text" id="p_${pid}_link" value="${escapeHtml(p.kelviq_payment_link)}" placeholder="https://checkout.kelviq.com/...">
+            <label class="lbl">Stripe Payment Link URL</label>
+            <input type="text" id="p_${pid}_link" value="${escapeHtml(p.stripe_payment_link)}" placeholder="https://buy.stripe.com/...">
 
-            <label class="lbl">Kelviq Plan Identifier (Optional API Match)</label>
-            <input type="text" id="p_${pid}_kplan" value="${escapeHtml(p.kelviq_plan_identifier)}" placeholder="e.g. pro_monthly">
+            <label class="lbl">Stripe Price ID (e.g. price_... or pro)</label>
+            <input type="text" id="p_${pid}_kplan" value="${escapeHtml(p.stripe_price_id)}" placeholder="e.g. price_12345 or pro">
 
             <div class="check-grid">
               <label><input type="checkbox" id="p_${pid}_wm" ${p.watermark_enabled?'checked':''}> Watermark On</label>
@@ -931,8 +928,8 @@
         billing_period: document.getElementById(`p_${id}_period`).value,
         daily_clip_limit: dailyClipLimit,
         max_resolution: parseInt(document.getElementById(`p_${id}_res`).value, 10),
-        kelviq_payment_link: document.getElementById(`p_${id}_link`).value.trim(),
-        kelviq_plan_identifier: document.getElementById(`p_${id}_kplan`).value.trim(),
+        stripe_payment_link: document.getElementById(`p_${id}_link`).value.trim(),
+        stripe_price_id: document.getElementById(`p_${id}_kplan`).value.trim(),
         watermark_enabled: document.getElementById(`p_${id}_wm`).checked,
         allow_auto_captions: document.getElementById(`p_${id}_cap`).checked,
         allow_audio_peak: document.getElementById(`p_${id}_peak`).checked,
@@ -970,14 +967,14 @@
       errBanner.innerText = '';
 
       const clearWebhookSecret = document.getElementById('clearWebhookSecretCheckbox').checked;
-      const webhookSecretVal = document.getElementById('setKelviqWebhookSecret').value.trim();
+      const webhookSecretVal = document.getElementById('setStripeWebhookSecret').value.trim();
 
       const payload = {
-        kelviqAccessToken: document.getElementById('setKelviqToken').value,
-        kelviqEnvironment: document.getElementById('setKelviqEnv').value,
-        kelviqWebhookSecret: clearWebhookSecret ? '' : webhookSecretVal,
+        stripeSecretKey: document.getElementById('setStripeSecretKey').value,
+        stripePublishableKey: document.getElementById('setStripePubKey').value.trim(),
+        stripeWebhookSecret: clearWebhookSecret ? '' : webhookSecretVal,
         clearWebhookSecret,
-        kelviqPortalUrl: document.getElementById('setKelviqPortalUrl').value.trim(),
+        stripePortalUrl: document.getElementById('setStripePortalUrl').value.trim(),
         defaultWatermarkText: document.getElementById('setWatermarkText').value.trim(),
         newAdminPassword: document.getElementById('setNewAdminPass').value,
       };
@@ -999,9 +996,9 @@
           return;
         }
         document.getElementById('setNewAdminPass').value = '';
-        document.getElementById('setKelviqWebhookSecret').value = '';
+        document.getElementById('setStripeWebhookSecret').value = '';
         document.getElementById('clearWebhookSecretCheckbox').checked = false;
-        showToast('✅ Kelviq & Security settings saved');
+        showToast('✅ Stripe & Security settings saved');
         await loadAdminOverview();
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to save settings';
@@ -1010,36 +1007,36 @@
         showToast('❌ ' + msg);
       } finally {
         btn.disabled = false;
-        btn.innerText = '💾 Save Kelviq & Security Settings';
+        btn.innerText = '💾 Save Stripe & Security Settings';
       }
     }
 
-    async function testKelviqConnection() {
-      const btn = document.getElementById('btnTestKelviq');
+    async function testStripeConnection() {
+      const btn = document.getElementById('btnTestStripe');
       btn.disabled = true;
       btn.innerText = '⏳ Testing...';
-      showToast('Testing Kelviq API connectivity...');
+      showToast('Testing Stripe API connectivity...');
       try {
-        const { res, data } = await fetchJson('/api/admin/kelviq/test', {
+        const { res, data } = await fetchJson('/api/admin/stripe/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
         if (res.status === 401) return checkAdminSession();
         if (!res.ok || !data?.connected) {
-          const msg = data?.error || data?.message || 'Could not verify Kelviq connection';
+          const msg = data?.error || data?.message || 'Could not verify Stripe connection';
           showToast('❌ ' + msg);
-          alert('Kelviq API error: ' + msg);
+          alert('Stripe API error: ' + msg);
           return;
         }
-        showToast('✅ Kelviq API endpoint reachable!');
+        showToast('✅ Stripe API endpoint reachable!');
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Network error testing Kelviq API';
+        const msg = err instanceof Error ? err.message : 'Network error testing Stripe API';
         showToast('❌ ' + msg);
-        alert('Kelviq API error: ' + msg);
+        alert('Stripe API error: ' + msg);
       } finally {
         btn.disabled = false;
-        btn.innerText = '🔌 Test Kelviq API';
+        btn.innerText = '🔌 Test Stripe API';
       }
     }
 
@@ -1809,7 +1806,7 @@
       }
     }
 
-    // ── Kelviq Event Log & JSON Preview ───────────────────────────────────
+    // ── Stripe Event Log & JSON Preview ───────────────────────────────────
     async function loadEventLog() {
       const btn = document.getElementById('btnRefreshEventLog');
       if (btn) btn.disabled = true;
@@ -1830,9 +1827,9 @@
 
     function renderEvents(events) {
       cachedEvents = Array.isArray(events) ? events : [];
-      const tbody = document.getElementById('kelviqEventsBody');
+      const tbody = document.getElementById('stripeEventsBody');
       if (!cachedEvents.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color: var(--muted);">No Kelviq webhook or activation events yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="color: var(--muted);">No Stripe webhook or subscription events yet.</td></tr>';
         return;
       }
       tbody.innerHTML = cachedEvents.map((e, idx) => {
@@ -1941,13 +1938,13 @@
         if (planId) savePlan(planId, btn);
       });
 
-      document.getElementById('btnTestKelviq').addEventListener('click', testKelviqConnection);
+      document.getElementById('btnTestStripe').addEventListener('click', testStripeConnection);
       document.getElementById('clearWebhookSecretCheckbox').addEventListener('change', (e) => {
         if (e.target.checked) {
-          document.getElementById('setKelviqWebhookSecret').value = '';
+          document.getElementById('setStripeWebhookSecret').value = '';
         }
       });
-      document.getElementById('setKelviqWebhookSecret').addEventListener('input', (e) => {
+      document.getElementById('setStripeWebhookSecret').addEventListener('input', (e) => {
         if (e.target.value.trim()) {
           document.getElementById('clearWebhookSecretCheckbox').checked = false;
         }
@@ -1997,9 +1994,9 @@
         }
       });
 
-      // Kelviq Events & JSON Preview toggle
+      // Stripe Events & JSON Preview toggle
       document.getElementById('btnRefreshEventLog').addEventListener('click', loadEventLog);
-      document.getElementById('kelviqEventsBody').addEventListener('click', (e) => {
+      document.getElementById('stripeEventsBody').addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action="toggle-event-json"][data-event-idx]');
         if (!btn) return;
         const idx = btn.getAttribute('data-event-idx');

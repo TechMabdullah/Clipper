@@ -2,7 +2,7 @@
 """
 🎬 Clipper Studio — Terminal User Interface (TUI) & Python CLI Control
 A local-first terminal dashboard and controller for real-time live stream clipping,
-chat explosion tracking, OpenCV facecam monitoring, Kelviq SaaS licensing, and VOD studio.
+chat explosion tracking, OpenCV facecam monitoring, Stripe SaaS billing, and VOD studio.
 """
 
 import sys
@@ -417,7 +417,7 @@ class ClipperClient:
         return self._parse_response(res)
 
     def get_upgrade_link(self, plan_id: str) -> Dict[str, Any]:
-        """Get the Kelviq payment/upgrade link for the given plan."""
+        """Get the Stripe Checkout/upgrade link for the given plan."""
         try:
             res = requests.get(
                 f"{self.base_url}/api/licensing/upgrade-link",
@@ -1015,7 +1015,7 @@ class ClipperTUI:
     def _format_api_error(self, res: Dict[str, Any], prefix: str = "Error") -> str:
         msg = res.get("error", "Unknown error")
         if res.get("upgrade_required"):
-            formatted = f"[🔒 LOCKED] {msg} — Press [K] to enter Kelviq License Key or upgrade!"
+            formatted = f"[🔒 LOCKED] {msg} — Press [K] to activate Stripe ID/Key or upgrade!"
             self.status_message = formatted
             self.status_color = "bold yellow"
             return formatted
@@ -1098,7 +1098,7 @@ class ClipperTUI:
                 ("[F]", "bold green"),
                 (" facecam | ", "dim"),
                 ("[K]", "bold magenta"),
-                (" Kelviq Plans/Key.", "dim"),
+                (" Stripe Plans/Key.", "dim"),
             )
             right = Panel(
                 Align.center(
@@ -1514,10 +1514,10 @@ class ClipperTUI:
         return 0.0
 
     def prompt_license_manager(self) -> None:
-        """[K] Kelviq License & Plans Manager."""
+        """[K] Stripe Subscription & Plans Manager."""
         while True:
             self.console.clear()
-            self.console.print("\n[bold magenta]💎 Kelviq License & SaaS Plans[/bold magenta]\n")
+            self.console.print("\n[bold magenta]💎 Stripe Billing & SaaS Plans[/bold magenta]\n")
             try:
                 billing = self.client.get_billing_status(raise_on_error=True)
                 self.billing_cache = billing
@@ -1596,8 +1596,8 @@ class ClipperTUI:
             self.console.print(ptable)
 
             self.console.print("\n[bold cyan]Actions:[/bold cyan]")
-            self.console.print("  [1] 🔑 Paste & Activate License Key (Kelviq or Admin VIP)")
-            self.console.print("  [2] 💳 Get Kelviq Checkout Link (Pro / Ultra)")
+            self.console.print("  [1] 🔑 Paste & Activate License Key (Stripe sub_/cs_ or Admin VIP)")
+            self.console.print("  [2] 💳 Get Stripe Checkout Link (Pro / Ultra)")
             if str(plan.get("id", "free")) != "free":
                 self.console.print("  [3] 🔓 Deactivate Current License")
             self.console.print("  [Enter] Return to Dashboard")
@@ -1630,11 +1630,11 @@ class ClipperTUI:
                     res = self.client.create_checkout(tier, email)
                     if res.get("ok") and res.get("checkoutUrl"):
                         url = res["checkoutUrl"]
-                        self.console.print(f"\n[bold green]💳 Kelviq Checkout URL:[/bold green] {url}")
+                        self.console.print(f"\n[bold green]💳 Stripe Checkout URL:[/bold green] {url}")
                         open_now = self.console.input("Open checkout link in browser now? [Y/n]: ").strip().lower()
                         if open_now not in ("n", "no"):
                             webbrowser.open(url)
-                        self.console.print("[dim]After payment, paste your emailed Kelviq license key with option [1].[/dim]")
+                        self.console.print("[dim]After payment, paste your Stripe cs_/sub_ ID or license key with option [1].[/dim]")
                     else:
                         msg = self._format_api_error(res, "Checkout error")
                         self.console.print(Text(f"\n{msg}", style="bold red"))
@@ -2653,7 +2653,7 @@ class ClipperTUI:
                     chk = self.client.create_checkout(target_plan)
                     if chk.get("ok") and chk.get("checkoutUrl"):
                         webbrowser.open(chk["checkoutUrl"])
-                        self.status_message = f"💳 Opened {target_plan.upper()} Kelviq checkout in browser!"
+                        self.status_message = f"💳 Opened {target_plan.upper()} Stripe Checkout in browser!"
                         self.status_color = "bold cyan"
                     else:
                         webbrowser.open(f"{self.client.base_url}/upgrade")
@@ -3354,8 +3354,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--status", action="store_true", help="Print live monitoring status and exit")
-    parser.add_argument("--plan-status", action="store_true", help="Show active Kelviq plan, license, and daily clip quota")
-    parser.add_argument("--activate-key", metavar="KEY", help="Activate a Kelviq or Admin VIP license key")
+    parser.add_argument("--plan-status", action="store_true", help="Show active Stripe plan, license, and daily clip quota")
+    parser.add_argument("--activate-key", metavar="KEY", help="Activate a Stripe sub_/cs_ ID or Admin VIP license key")
     parser.add_argument("--start", action="store_true", help="Start monitoring a stream")
     parser.add_argument("--stop", action="store_true", help="Stop the active monitoring session")
     parser.add_argument("--clip", nargs="?", const=20, type=int, help="Trigger manual clip (optional seconds, default 20)")

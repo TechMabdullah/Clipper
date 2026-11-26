@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 48" width="1120" height="48" role="img" aria-label="Clipper Live Status Strip">
+  <defs>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1A1A2E"/>
+      <stop offset="50%" stop-color="#221E42"/>
+      <stop offset="100%" stop-color="#1A1A2E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1120" height="48" rx="14" fill="url(#barGrad)" stroke="#2F2F4E"/>
+
+  <!-- Telemetry Item 1: Live Engine Radar -->
+  <g transform="translate(24, 24)">
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#EF4444" stroke-width="1.5">
+      <animate attributeName="r" values="5;14" dur="1.6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.8;0" dur="1.6s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="0" cy="0" r="4.5" fill="#EF4444"/>
+    <text x="16" y="4" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="800" letter-spacing="0.5">ENGINE : ONLINE</text>
+    <text x="126" y="4" fill="#9CA0BD" font-family="Inter, Segoe UI, sans-serif" font-size="11">(:4001)</text>
+  </g>
+
+  <!-- Divider -->
+  <circle cx="210" cy="24" r="2.5" fill="#3D3D60"/>
+
+  <!-- Telemetry Item 2: Next.js SaaS Surface -->
+  <g transform="translate(245, 24)">
+    <circle cx="0" cy="0" r="4.5" fill="#6C63FF">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="16" y="4" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="800">NEXT.JS 15 SAAS</text>
+    <text x="128" y="4" fill="#6C63FF" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">App Router (:3000)</text>
+  </g>
+
+  <!-- Divider -->
+  <circle cx="480" cy="24" r="2.5" fill="#3D3D60"/>
+
+  <!-- Telemetry Item 3: Stripe Billing -->
+  <g transform="translate(515, 24)">
+    <circle cx="0" cy="0" r="4.5" fill="#FF8A30">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="16" y="4" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="800">STRIPE BILLING</text>
+    <text x="122" y="4" fill="#FF8A30" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">HMAC Webhooks</text>
+  </g>
+
+  <!-- Divider -->
+  <circle cx="740" cy="24" r="2.5" fill="#3D3D60"/>
+
+  <!-- Telemetry Item 4: Zero-Trust 2FA & OTP -->
+  <g transform="translate(775, 24)">
+    <circle cx="0" cy="0" r="4.5" fill="#FF5FA2">
+      <animate attributeName="opacity" values="0.4;1;0.4" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+    <text x="16" y="4" fill="#FFFFFF" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="800">2FA OTP &amp; TOTP</text>
+    <text x="122" y="4" fill="#FF5FA2" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700">Zero-Trust /admin</text>
+  </g>
+
+  <!-- Telemetry Item 5: Test Suite Badge -->
+  <g transform="translate(980, 10)">
+    <rect width="118" height="28" rx="8" fill="#10B981" fill-opacity="0.18" stroke="#10B981"/>
+    <circle cx="16" cy="14" r="4" fill="#10B981">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <text x="28" y="18" fill="#10B981" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="800">34/34 PASS</text>
+  </g>
+</svg>

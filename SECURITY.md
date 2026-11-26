@@ -2,7 +2,7 @@
 
 ## Local-First Security Model
 
-Clipper Studio processes video streams, chat events, SQLite records, and AI metadata strictly on your local workstation (`127.0.0.1` by default). External network calls occur only for explicitly configured integrations (stream ingest, Kelviq licensing/checkout, optional Groq/OpenAI/Gemini AI keys, and Discord/Telegram notifications).
+Clipper Studio processes video streams, chat events, SQLite records, and AI metadata strictly on your local workstation (`127.0.0.1` by default). External network calls occur only for explicitly configured integrations (stream ingest, Stripe checkout/webhooks, Firebase Auth/Firestore, Resend OTP, optional Groq/OpenAI/Gemini AI keys, and Discord/Telegram notifications).
 
 ---
 
@@ -19,7 +19,7 @@ Clipper Studio processes video streams, chat events, SQLite records, and AI meta
 ### 2. Local Origin/Referer CSRF Protection (`index.ts`, `admin-routes.ts`, `apps/notification-service/src/index.ts`)
 
 - **Loopback-Only CORS**: Both `clipper-service` (`:4001`) and `notification-service` (`:4003`) permit cross-origin requests only from explicit loopback origins (`localhost`, `127.0.0.1`, `[::1]`). Untrusted `OPTIONS` preflight requests receive HTTP `403`.
-- **Mutating Request Origin/Referer Validation**: State-changing `/api/*` requests (`POST`, `PUT`, `PATCH`, `DELETE`, excluding signed `POST /api/webhooks/kelviq`) validate `Origin` and `Referer` headers against `LOCAL_ORIGIN_RE` and reject untrusted sources with `403`.
+- **Mutating Request Origin/Referer Validation**: State-changing `/api/*` requests (`POST`, `PUT`, `PATCH`, `DELETE`, excluding signed `POST /api/webhooks/stripe`) validate `Origin` and `Referer` headers against `LOCAL_ORIGIN_RE` and reject untrusted sources with `403`.
 - **Explicit CSRF / Auth Header on Destructive Clip Endpoints**: Both batch `DELETE /api/clipper/clips` (capped at 50 clips) and single-clip `DELETE /api/clipper/clips/:id` reject requests with `403` unless the caller supplies `X-Clipper-CSRF: 1`, an authenticated admin session, or a valid `csk_*` API key (`hasClipDeleteAuthorization()`). Deletions execute atomically across all child tables via `deleteClipCascade()` and unlink media files strictly through `safeUnlinkMediaFile()`. All browser UIs (`index.html`, `admin.html`, `upgrade.html`) and `clipper_tui.py` send `X-Clipper-CSRF: 1`.
 
 ### 3. Hashed `csk_*` API Keys (`db.ts`, `index.ts`, `admin.html`)
@@ -28,12 +28,12 @@ Clipper Studio processes video streams, chat events, SQLite records, and AI meta
 - **One-Time Reveal, Masked Listing & Instant Revocation**: Raw `csk_*` tokens are returned only once at creation time. `GET /api/admin/api-keys` lists masked tokens (`csk_***<last4>`), labels, and `last_used_at` timestamps. `DELETE /api/admin/api-keys/:id` sets `active = 0` for immediate revocation.
 - **Optional Strict Enforcement (`REQUIRE_API_KEY`)**: When `REQUIRE_API_KEY="true"` is configured in `.env.local`, non-browser external requests to `/api/clipper/*` and `/api/studio/*` must present a valid `Authorization: Bearer csk_...` header (`401` otherwise).
 
-### 4. Kelviq Webhook Verification & Replay Protection (`licensing.ts`, `admin-routes.ts`, `index.ts`)
+### 4. Stripe Webhook Verification & Replay Protection (`licensing.ts`, `admin-routes.ts`, `index.ts`, `/api/webhooks/stripe`)
 
-- **Raw Body Signature Verification**: `POST /api/webhooks/kelviq` is mounted before `express.json()` with `express.raw({ type: 'application/json' })` so the exact raw `Buffer` payload is preserved.
-- **Reject Unsigned Webhooks by Default (`403`)**: When `KELVIQ_WEBHOOK_SECRET` (or Admin setting `kelviq_webhook_secret`) is unset, incoming webhooks are rejected with HTTP `403` by default unless `KELVIQ_ALLOW_UNSIGNED_WEBHOOKS="true"` is explicitly set for local testing.
-- **HMAC + 5-Minute Replay Freshness Window**: When a webhook secret is configured, payloads are verified with `@kelviq/node-sdk` `validateEvent()` and `webhook-timestamp` is checked to be within a 5-minute (`±300s`) replay window.
-- **Automated License Revocation**: `license.revoked`, `license.disabled`, `license.expired`, `license.deleted`, and `subscription.canceled` / `cancelled` / `expired` / `revoked` events automatically revert matching active workstation licenses to Free.
+- **Raw Body Signature Verification**: `POST /api/webhooks/stripe` is mounted before `express.json()` with `express.raw({ type: 'application/json' })` in `clipper-service` and forwards raw `ArrayBuffer` untouched from Next.js `/api/webhooks/stripe`.
+- **Reject Unsigned Webhooks by Default (`403`)**: When `STRIPE_WEBHOOK_SECRET` (or Admin setting `stripe_webhook_secret`) is unset, incoming webhooks are rejected with HTTP `403` by default unless `STRIPE_ALLOW_UNSIGNED_WEBHOOKS="true"` is explicitly set for local testing.
+- **HMAC + 5-Minute Replay Freshness Window**: When a webhook secret is configured, payloads are verified with official Stripe SDK `stripe.webhooks.constructEvent(rawBody, sig, secret, 300)` enforcing a 5-minute (`±300s`) timestamp replay window.
+- **Automated Subscription Revocation**: `customer.subscription.deleted`, `customer.subscription.paused`, `charge.refunded`, and `invoice.payment_failed` events automatically revert matching active licenses to Free.
 
 ### 5. Content Security Policy (CSP) & XSS Defense (`index.ts`, `index.html`, `admin.html`, `upgrade.html`)
 
@@ -75,8 +75,8 @@ Clipper Studio processes video streams, chat events, SQLite records, and AI meta
 - **Tiered Per-IP Rate Limiting**: `/api/*` (excluding `/api/live/chat/stream` SSE) enforces `20 req/min` on auth routes (`/api/admin/login`, `/api/billing/activate`, `POST /api/share/:token/access`), `60 req/min` on mutating requests, and `240 req/min` on read requests.
 - **Admin-Protected Stream Telemetry**: Reading (`GET /api/studio/snapshots/sessions`, `GET /api/studio/snapshots/:sessionId`) and pruning (`DELETE /api/studio/snapshots`) stream health snapshots require `requireAdminAuth`.
 - **Security & Admin Audit Log (`audit_logs`)**: Admin logins, plan updates, settings/password changes, VIP key generation/revocation, API key creation/revocation, outbound webhook operations, collections/ratings/chapters/comments/shares/A/B operations, CSV exports, music uploads, manual clip metadata updates, scheduled job create/delete, clip archive/unarchive, and single/batch clip deletions are persisted to `audit_logs` and exposed via admin-protected `GET /api/admin/audit-log`.
-- **Redacted Webhook Event Logs**: License keys inside stored and displayed `kelviq_events` (`GET /api/admin/event-log`, `GET /api/admin/overview`) are masked via `maskLicenseKeyValue()` and `redactLicenseKeysInObject()`, with additional field masking in the `/admin` JSON previewer.
-- **Live Admin Security Self-Audit (`GET /api/admin/security-scan`)**: Admin-authenticated runtime posture scan scoring 8 security checks (`0–100`): custom admin password, Kelviq webhook HMAC verification, loopback network bind, `REQUIRE_API_KEY` enforcement, active tiered rate limiter, CSRF Origin/Referer guard, CSP `frame-ancestors 'none'`, and share-link expiration/password coverage.
+- **Redacted Webhook Event Logs**: License keys inside stored and displayed `stripe_events` (`GET /api/admin/event-log`, `GET /api/admin/overview`) are masked via `maskLicenseKeyValue()` and `redactLicenseKeysInObject()`, with additional field masking in the `/admin` JSON previewer.
+- **Live Admin Security Self-Audit (`GET /api/admin/security-scan`)**: Admin-authenticated runtime posture scan scoring 8 security checks (`0–100`): custom admin password, Stripe webhook signature verification, loopback network bind, `REQUIRE_API_KEY` enforcement, active tiered rate limiter, CSRF Origin/Referer guard, CSP `frame-ancestors 'none'`, and share-link expiration/password coverage.
 
 ---
 
@@ -84,6 +84,16 @@ Clipper Studio processes video streams, chat events, SQLite records, and AI meta
 
 - **Change `ADMIN_PASSWORD` immediately** from the default (`admin123`) in `.env.local` or inside `/admin` (minimum 8 characters).
 - **Keep `HOST="127.0.0.1"`** unless intentionally placing the service behind an authenticated reverse proxy.
-- **Configure `KELVIQ_WEBHOOK_SECRET`** before enabling public Kelviq webhooks; never set `KELVIQ_ALLOW_UNSIGNED_WEBHOOKS="true"` outside isolated local testing.
+- **Configure `STRIPE_WEBHOOK_SECRET`** before enabling public Stripe webhooks; never set `STRIPE_ALLOW_UNSIGNED_WEBHOOKS="true"` outside isolated local testing.
 - **Enable `REQUIRE_API_KEY="true"`** and issue scoped `csk_*` bearer keys in `/admin` when external automation scripts call `/api/clipper/*` or `/api/studio/*`.
 - **Back up before upgrading**: Use `.\update.ps1` (Windows) or `./update.sh` (macOS/Linux) to automatically snapshot `.env.local` and SQLite databases to `data/backups/<timestamp>/` prior to pulling changes.
+
+---
+
+### 9. Next.js SaaS Surface Security (`apps/web`, Firebase + Resend OTP + RBAC + Internal Bridge)
+
+- **Post-Login Email OTP Verification Gate (`otp.ts`, `/api/auth/otp/send`, `/api/auth/otp/verify`)**: Signing in via Email/Password or Google generates a `crypto.randomInt(100000, 1000000)` 6-digit challenge hashed with `HMAC-SHA256` (`OTP_HMAC_SECRET`) and validated with `crypto.timingSafeEqual()`, enforcing a 5-minute TTL, max 5 failed verification attempts per challenge, 60-second resend cooldown, and 5 sends/hour limit before minting an `HttpOnly` Firebase session cookie (`12h` for `support`/`admin`/`superadmin`, `5d` for `customer`).
+- **Four-Tier Role & Permission Matrix (`rbac.ts`, `permissions.ts`, `session.ts`)**: `customer`, `support`, `admin`, and `superadmin` roles are checked server-side on every Next.js API route via `requirePermission(perm, requireAdminTotp)` and mirrored in [`apps/web/firestore.rules`](apps/web/firestore.rules). Edge middleware checks cookie presence only; full cryptographic session verification and Firebase revocation checks execute on the Node server.
+- **Encrypted Admin Authenticator TOTP (`totp.ts`, `/api/auth/totp`)**: RFC 6238 SHA-1 TOTP secrets are encrypted at rest in Firestore `admin_totp` using AES-256-GCM (`ADMIN_TOTP_ENCRYPTION_KEY`) and unlock a signed `clipper_admin_totp` cookie valid for 12 hours.
+- **Scoped Loopback Media Bridge (`bridge.ts`, `/api/bridge/[...path]`, `admin-routes.ts`)**: Browser requests never bypass authentication to touch `:4001`. Next.js authorizes the user via Firebase Session Cookie + RBAC + TOTP, strips incoming spoofing headers, rejects path traversal (`..` / scheme smuggling), and forwards server-to-server requests to `127.0.0.1:4001` signed with `INTERNAL_BRIDGE_SECRET` (`crypto.timingSafeEqual`, verified loopback-only on `clipper-service`).
+- **Formula-Safe Chunked CSV Exports (`csv.ts`, `/api/admin/export`)**: Admin and clip CSV streams sanitize every string cell with `escapeCsvCell()` (`'`), neutralizing spreadsheet `=`, `+`, `-`, `@`, `\t`, `\r` formula injection.

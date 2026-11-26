@@ -100,11 +100,12 @@ import {
   assertSafeRemoteUrl,
 } from './studio.js';
 import {
-  kelviqWebhookMiddleware,
+  stripeWebhookMiddleware,
   registerSaasAndAdminRoutes,
   handleErrorStatus,
   requireAdminAuth,
   hasAdminSession,
+  hasTrustedBridgeSecret,
   LOCAL_ORIGIN_RE,
   VALID_LIVE_PLATFORMS,
   VALID_CLIP_LAYOUTS,
@@ -434,8 +435,8 @@ function pipeWithByteLimit(
   upstreamStream.pipe(limiter).pipe(res);
 }
 
-// Kelviq Webhook MUST receive raw Buffer body before express.json() for HMAC verification
-app.post('/api/webhooks/kelviq', ...kelviqWebhookMiddleware);
+// Stripe Webhook MUST receive raw Buffer body before express.json() for HMAC verification
+app.post('/api/webhooks/stripe', ...stripeWebhookMiddleware);
 
 const defaultJsonParser = express.json({ limit: '2mb' });
 const musicUploadJsonParser = express.json({ limit: '22mb' });
@@ -571,7 +572,7 @@ app.use((req, res, next) => {
 
 // Reject state-changing /api/* requests with untrusted Origin or Referer headers
 app.use('/api', (req, res, next) => {
-  if (!MUTATING_METHODS.has(req.method.toUpperCase()) || req.path === '/webhooks/kelviq') {
+  if (!MUTATING_METHODS.has(req.method.toUpperCase()) || req.path === '/webhooks/stripe') {
     next();
     return;
   }
@@ -598,6 +599,10 @@ app.use('/api', (req, res, next) => {
 
 // ── API Key Authentication Middleware (mounted BEFORE /api/clipper & /api/studio) ──
 function apiKeyAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (hasTrustedBridgeSecret(req)) {
+    next();
+    return;
+  }
   const authHeader = req.headers.authorization ?? '';
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     const token = authHeader.slice('bearer '.length).trim();
@@ -2712,7 +2717,7 @@ app.delete('/api/studio/scheduled-jobs/:id', (req, res) => {
 });
 
 // ── Upgrade Link ──────────────────────────────────────────────────────────
-/** Returns the Kelviq payment link (or dynamic checkout session URL) for Pro / Ultra */
+/** Returns the Stripe payment link (or dynamic Checkout session URL) for Pro / Ultra */
 app.get('/api/licensing/upgrade-link', async (req, res) => {
   const planId = String(req.query.plan ?? '').trim().toLowerCase();
   if ((planId !== 'pro' && planId !== 'ultra') || !planExists(planId)) {
@@ -2720,7 +2725,7 @@ app.get('/api/licensing/upgrade-link', async (req, res) => {
     return;
   }
   const plan = getPlanById(planId);
-  let url = (plan.kelviq_payment_link ?? '').trim();
+  let url = (plan.stripe_payment_link ?? '').trim();
   if (!url) {
     try {
       url = await resolveCheckoutUrl(planId);
@@ -2868,9 +2873,9 @@ app.get('/api/system/diagnostics', async (_req, res) => {
   const activeApiKeyCount = Number(
     (db.prepare('SELECT COUNT(*) AS cnt FROM api_keys WHERE active = 1').get() as { cnt: number })?.cnt ?? 0,
   );
-  const kelviqWebhookSecret = (
-    getSetting('kelviq_webhook_secret') ||
-    process.env.KELVIQ_WEBHOOK_SECRET ||
+  const stripeWebhookSecret = (
+    getSetting('stripe_webhook_secret') ||
+    process.env.STRIPE_WEBHOOK_SECRET ||
     ''
   ).trim();
 
@@ -2894,7 +2899,7 @@ app.get('/api/system/diagnostics', async (_req, res) => {
     },
     security: {
       usingDefaultPassword: isUsingDefaultAdminPassword(),
-      kelviqWebhookSecretConfigured: Boolean(kelviqWebhookSecret),
+      stripeWebhookSecretConfigured: Boolean(stripeWebhookSecret),
       requireApiKey: process.env.REQUIRE_API_KEY === 'true',
       apiKeyCount: activeApiKeyCount,
     },
@@ -3931,12 +3936,12 @@ app.get('/api/admin/security-scan', requireAdminAuth, (_req, res) => {
   }
 
   const defaultAdminPw = isUsingDefaultAdminPassword();
-  const kelviqSecret = (
-    getSetting('kelviq_webhook_secret') ||
-    process.env.KELVIQ_WEBHOOK_SECRET ||
+  const stripeSecret = (
+    getSetting('stripe_webhook_secret') ||
+    process.env.STRIPE_WEBHOOK_SECRET ||
     ''
   ).trim();
-  const allowUnsignedWebhooks = process.env.KELVIQ_ALLOW_UNSIGNED_WEBHOOKS === 'true';
+  const allowUnsignedWebhooks = process.env.STRIPE_ALLOW_UNSIGNED_WEBHOOKS === 'true';
   const normalizedHost = HOST.trim().toLowerCase();
   const isLoopbackBind =
     normalizedHost === '127.0.0.1' ||
@@ -3969,14 +3974,14 @@ app.get('/api/admin/security-scan', requireAdminAuth, (_req, res) => {
         : 'Custom administrator password hash is configured.',
     },
     {
-      id: 'kelviq_webhook_hmac',
-      label: 'Kelviq Webhook HMAC Verification',
-      status: allowUnsignedWebhooks ? 'fail' : kelviqSecret ? 'pass' : 'warn',
+      id: 'stripe_webhook_hmac',
+      label: 'Stripe Webhook Signature Verification',
+      status: allowUnsignedWebhooks ? 'fail' : stripeSecret ? 'pass' : 'warn',
       detail: allowUnsignedWebhooks
-        ? 'KELVIQ_ALLOW_UNSIGNED_WEBHOOKS=true allows unverified webhook payloads.'
-        : kelviqSecret
+        ? 'STRIPE_ALLOW_UNSIGNED_WEBHOOKS=true allows unverified webhook payloads.'
+        : stripeSecret
           ? 'Webhook HMAC secret configured and unsigned payloads rejected.'
-          : 'Unsigned webhooks are blocked (403), but KELVIQ_WEBHOOK_SECRET is not configured.',
+          : 'Unsigned webhooks are blocked (403), but STRIPE_WEBHOOK_SECRET is not configured.',
     },
     {
       id: 'loopback_bind',
@@ -4039,7 +4044,7 @@ app.get('/api/admin/security-scan', requireAdminAuth, (_req, res) => {
   });
 });
 
-// ── Admin API Keys, Kelviq Event Log & Audit Log (Admin Protected) ────────
+// ── Admin API Keys, Stripe Event Log & Audit Log (Admin Protected) ────────
 app.post('/api/admin/api-keys', requireAdminAuth, (req, res) => {
   const { label } = (req.body ?? {}) as { label?: unknown };
   if (typeof label !== 'string' || !label.trim()) {
@@ -4076,7 +4081,7 @@ app.get('/api/admin/event-log', requireAdminAuth, (req, res) => {
   const limit = Number.isFinite(rawLimit) ? Math.min(200, Math.max(1, Math.trunc(rawLimit))) : 50;
   const rows = db.prepare(
     `SELECT id, event_type, customer_email, license_key, plan_identifier, amount, raw_json, received_at
-     FROM kelviq_events ORDER BY received_at DESC LIMIT ?`
+     FROM stripe_events ORDER BY received_at DESC LIMIT ?`
   ).all(limit) as Array<Record<string, unknown>>;
   const parsed = rows.map((r) => {
     let json: unknown = r.raw_json;
@@ -4241,7 +4246,7 @@ app.delete('/api/admin/webhooks/:id', requireAdminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── SaaS Billing, Kelviq Licensing, Watchlist & Admin Routes ──────────────
+// ── SaaS Billing, Stripe Billing, Watchlist & Admin Routes ──────────────
 registerSaasAndAdminRoutes(app, async (entry) => {
   const ent = getActiveEntitlement();
   if (!ent.plan.allow_watchlist) return;

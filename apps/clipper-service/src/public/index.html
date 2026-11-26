@@ -278,7 +278,7 @@
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 700; }
 
-    /* Modals (Kelviq Pricing & License Key) */
+    /* Modals (Stripe Billing & License Key) */
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 90; }
     .modal-card { background: #14141b; border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 920px; max-height: 92vh; overflow-y: auto; padding: 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.7); }
     .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 18px; }
@@ -319,7 +319,7 @@
       <a href="/admin" class="nav-btn" style="text-decoration: none;"><span>🛡️ Admin Dashboard</span><span class="nav-pill">LOCK</span></a>
     </div>
 
-    <!-- Current Plan & Kelviq Quota Widget -->
+    <!-- Current Plan & Stripe Quota Widget -->
     <div class="plan-widget">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span class="plan-badge free" id="sidebarPlanBadge">FREE STARTER</span>
@@ -328,7 +328,7 @@
       <div class="quota-bar"><div class="quota-fill" id="sidebarQuotaFill"></div></div>
       <div style="font-size: 11.5px; color: var(--muted); margin-bottom: 12px;" id="sidebarQuotaText">0 / 3 clips used today</div>
       <div style="display: flex; flex-direction: column; gap: 6px;">
-        <button type="button" class="btn btn-sm" id="btnSidebarUpgrade" style="width: 100%;">💎 Upgrade Plan (Kelviq)</button>
+        <button type="button" class="btn btn-sm" id="btnSidebarUpgrade" style="width: 100%;">💎 Upgrade Plan (Stripe)</button>
         <button type="button" class="btn btn-secondary btn-sm" id="btnSidebarLicense" style="width: 100%;">🔑 Activate License Key</button>
       </div>
     </div>
@@ -1033,14 +1033,14 @@
     </div>
   </div>
 
-  <!-- KELVIQ PRICING PLANS MODAL -->
+  <!-- STRIPE PRICING PLANS MODAL -->
   <div id="upgradeModal" class="modal-backdrop">
     <div class="modal-card">
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
         <div>
-          <h2 style="font-size: 20px;">💎 Upgrade Clipper Studio via Kelviq</h2>
+          <h2 style="font-size: 20px;">💎 Upgrade Clipper Studio via Stripe</h2>
           <p style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-            Global Visa/Mastercard checkout via Kelviq Merchant of Record. Complete payment and receive your License Key instantly via email.
+            Secure Visa/Mastercard & wallet subscriptions powered by Stripe Checkout.
           </p>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
@@ -1051,7 +1051,7 @@
       <div id="upgradeModalReason" style="display:none; margin-top:12px; padding:10px 12px; border-radius:8px; background:rgba(234,179,8,0.14); border:1px solid rgba(234,179,8,0.45); color:#fde047; font-size:12.5px;"></div>
       <div id="pricingCardsGrid" class="pricing-grid"></div>
       <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-        <span style="font-size: 12.5px; color: var(--muted);">Already paid and received your email key from Kelviq?</span>
+        <span style="font-size: 12.5px; color: var(--muted);">Already have a Stripe Subscription ID (sub_...) or VIP key?</span>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <a href="/upgrade" class="btn btn-sm">🚀 Full Plans &amp; FAQ (/upgrade)</a>
           <button type="button" class="btn btn-secondary btn-sm" id="btnModalOpenLicense">🔑 Enter License Key</button>
@@ -1087,7 +1087,7 @@
     </div>
   </div>
 
-  <!-- KELVIQ LICENSE KEY MODAL -->
+  <!-- STRIPE / VIP KEY MODAL -->
   <div id="licenseModal" class="modal-backdrop">
     <div class="modal-card" style="max-width: 480px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
@@ -1095,8 +1095,8 @@
         <button type="button" class="btn btn-secondary btn-sm" id="btnCloseLicenseModal">✕</button>
       </div>
       <div id="currentLicenseDetails" style="background: #101015; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 14px; font-size: 12.5px;"></div>
-      <label class="field-label">Paste License Key (Emailed by Kelviq or issued in Admin)</label>
-      <input type="text" id="licenseKeyInput" placeholder="e.g. KELVIQ-... or CLIP-PRO-..." style="width: 100%; margin-bottom: 12px;">
+      <label class="field-label">Paste Stripe Subscription/Session ID (sub_/cs_) or VIP Key</label>
+      <input type="text" id="licenseKeyInput" placeholder="e.g. sub_..., cs_..., or CLIP-PRO-..." style="width: 100%; margin-bottom: 12px;">
       <div style="display: flex; gap: 8px;">
         <button type="button" class="btn" id="btnActivateLicense" style="flex: 1;">Activate Key</button>
         <button type="button" class="btn btn-red btn-sm" id="btnDeactivateLic" style="display:none;">Deactivate</button>
@@ -1582,7 +1582,7 @@
       }
     }
 
-    // ── Billing, Kelviq Licensing & Overview Analytics ────────────────────
+    // ── Billing, Stripe Licensing & Overview Analytics ────────────────────
     async function refreshBillingAndAnalytics() {
       try {
         const [billRes, sumRes] = await Promise.all([
@@ -1717,7 +1717,7 @@
           ? `<button type="button" class="btn btn-secondary" disabled style="width:100%;">✓ Current Active Plan</button>`
           : (p.price_usd <= 0
               ? `<button type="button" class="btn btn-secondary" disabled style="width:100%;">Default Tier</button>`
-              : `<button type="button" class="btn" style="width:100%;" data-action="checkout-plan" data-plan-id="${escapeHtml(p.id)}">💳 Pay via Kelviq Checkout</button>`);
+              : `<button type="button" class="btn" style="width:100%;" data-action="checkout-plan" data-plan-id="${escapeHtml(p.id)}">💳 Pay via Stripe Checkout</button>`);
 
         return `
           <div class="tier-card ${p.id === 'pro' ? 'featured' : ''}">
@@ -1745,9 +1745,9 @@
 
     function closeUpgradeModal() { document.getElementById('upgradeModal').style.display = 'none'; }
 
-    async function startKelviqCheckout(planId, btnEl) {
+    async function startStripeCheckout(planId, btnEl) {
       if (btnEl) btnEl.disabled = true;
-      showToast('Opening Kelviq checkout...');
+      showToast('Opening Stripe Checkout...');
       try {
         const { res, data } = await fetchJson('/api/billing/checkout', {
           method: 'POST',
@@ -1765,7 +1765,7 @@
         window.open(data.checkoutUrl, '_blank', 'noopener,noreferrer');
         closeUpgradeModal();
         openLicenseModal();
-        showToast('Complete payment in Kelviq tab, then paste your emailed license key here!');
+        showToast('Complete payment in the Stripe tab to unlock your plan automatically!');
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Failed to open checkout');
       } finally {
@@ -5502,7 +5502,7 @@
       document.getElementById('pricingCardsGrid').addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action="checkout-plan"][data-plan-id]');
         if (!btn) return;
-        startKelviqCheckout(btn.getAttribute('data-plan-id'), btn);
+        startStripeCheckout(btn.getAttribute('data-plan-id'), btn);
       });
 
       const licenseModal = document.getElementById('licenseModal');

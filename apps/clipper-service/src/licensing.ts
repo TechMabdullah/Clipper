@@ -1,11 +1,6 @@
 import crypto from 'node:crypto';
 import os from 'node:os';
-import {
-  Kelviq,
-  validateEvent,
-  WebhookVerificationError,
-  type KelviqEnvironment,
-} from '@kelviq/node-sdk';
+import Stripe from 'stripe';
 import { db, getSetting, getDailyClipCount, verifyPassword } from './db.js';
 
 export type PlanId = 'free' | 'pro' | 'ultra';
@@ -15,6 +10,13 @@ export type EntitlementFeature =
   | 'virality_ai'
   | 'watchlist'
   | 'custom_branding';
+
+export class StripeWebhookVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StripeWebhookVerificationError';
+  }
+}
 
 export interface PlanRecord {
   id: PlanId;
@@ -30,8 +32,8 @@ export interface PlanRecord {
   allow_virality_ai: number;
   allow_watchlist: number;
   allow_custom_branding: number;
-  kelviq_payment_link: string;
-  kelviq_plan_identifier: string;
+  stripe_payment_link: string;
+  stripe_price_id: string;
   updated_at: string;
 }
 
@@ -40,7 +42,7 @@ export interface ActiveLicenseRecord {
   license_key: string;
   instance_id: string;
   plan_id: PlanId;
-  provider: 'free' | 'kelviq' | 'local';
+  provider: 'free' | 'stripe' | 'local';
   customer_email: string;
   customer_name: string;
   expires_on: string;
@@ -67,17 +69,10 @@ export class EntitlementError extends Error {
   }
 }
 
-export function getKelviqClient(): Kelviq | null {
-  const token = getSetting('kelviq_access_token') || process.env.KELVIQ_API_KEY || '';
-  if (!token.trim()) return null;
-  const envRaw = (getSetting('kelviq_environment') || process.env.KELVIQ_ENV || 'production').toLowerCase();
-  const environment: KelviqEnvironment = envRaw === 'sandbox' ? 'sandbox' : 'production';
-  return new Kelviq({
-    accessToken: token.trim(),
-    environment,
-    timeout: 12_000,
-    enableCache: true,
-  });
+export function getStripeClient(): Stripe | null {
+  const key = (getSetting('stripe_secret_key') || process.env.STRIPE_SECRET_KEY || '').trim();
+  if (!key) return null;
+  return new Stripe(key, { timeout: 12_000 });
 }
 
 export function planExists(planId: string): boolean {
@@ -89,8 +84,7 @@ export function planExists(planId: string): boolean {
 }
 
 export function listPlans(): PlanRecord[] {
-  const rows = db.prepare(`SELECT * FROM plans ORDER BY price_usd ASC`).all() as unknown as PlanRecord[];
-  return rows;
+  return db.prepare(`SELECT * FROM plans ORDER BY price_usd ASC`).all() as unknown as PlanRecord[];
 }
 
 export function getPlanById(planId: string): PlanRecord {
@@ -129,8 +123,8 @@ export function updatePlanConfig(planId: string, patch: Partial<PlanRecord>): Pl
       allow_virality_ai = ?,
       allow_watchlist = ?,
       allow_custom_branding = ?,
-      kelviq_payment_link = ?,
-      kelviq_plan_identifier = ?,
+      stripe_payment_link = ?,
+      stripe_price_id = ?,
       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
     WHERE id = ?
   `).run(
@@ -146,9 +140,9 @@ export function updatePlanConfig(planId: string, patch: Partial<PlanRecord>): Pl
     patch.allow_virality_ai !== undefined ? (patch.allow_virality_ai ? 1 : 0) : current.allow_virality_ai,
     patch.allow_watchlist !== undefined ? (patch.allow_watchlist ? 1 : 0) : current.allow_watchlist,
     patch.allow_custom_branding !== undefined ? (patch.allow_custom_branding ? 1 : 0) : current.allow_custom_branding,
-    patch.kelviq_payment_link ?? current.kelviq_payment_link,
-    patch.kelviq_plan_identifier ?? current.kelviq_plan_identifier,
-    current.id
+    patch.stripe_payment_link ?? current.stripe_payment_link,
+    patch.stripe_price_id ?? current.stripe_price_id,
+    current.id,
   );
   return getPlanById(current.id);
 }
@@ -175,7 +169,6 @@ let bgValidationInFlight = false;
 export function getActiveEntitlement() {
   let lic = getActiveLicenseRow();
 
-  // Verify local VIP licenses against DB active flag & expiration immediately
   if (lic.provider === 'local') {
     const localRow = lic.license_key
       ? (db.prepare(`SELECT active, expires_on FROM local_licenses WHERE license_key=?`).get(lic.license_key) as
@@ -190,17 +183,14 @@ export function getActiveEntitlement() {
     }
   }
 
-  // Check expiration locally; for Kelviq subscriptions with an API key configured, mark stale so
-  // validateCurrentLicense() can confirm renewal or cancellation before revoking.
   const expMs = lic.expires_on ? Date.parse(lic.expires_on) : NaN;
   const isExpired = lic.plan_id !== 'free' && !Number.isNaN(expMs) && expMs < Date.now();
-  if (isExpired && (lic.provider !== 'kelviq' || !getKelviqClient())) {
+  if (isExpired && (lic.provider !== 'stripe' || !getStripeClient())) {
     resetToFreeLicense();
     lic = getActiveLicenseRow();
   }
 
-  // Periodic background Kelviq validation (every 6h, or immediately if locally expired/invalid timestamp)
-  if (lic.provider === 'kelviq' && lic.license_key && !bgValidationInFlight) {
+  if (lic.provider === 'stripe' && lic.license_key && !bgValidationInFlight) {
     const parsedLast = lic.last_validated_at ? Date.parse(lic.last_validated_at) : 0;
     const lastMs = Number.isFinite(parsedLast) ? parsedLast : 0;
     if (isExpired || Date.now() - lastMs > 6 * 3600_000) {
@@ -220,9 +210,7 @@ export function getActiveEntitlement() {
     plan,
     license: {
       ...lic,
-      maskedKey: lic.license_key
-        ? maskLicenseKeyValue(lic.license_key)
-        : '',
+      maskedKey: lic.license_key ? maskLicenseKeyValue(lic.license_key) : '',
     },
     usage: {
       usedToday,
@@ -230,8 +218,10 @@ export function getActiveEntitlement() {
       remaining,
       unlimited,
     },
-    kelviqConfigured: Boolean((getSetting('kelviq_access_token') || process.env.KELVIQ_API_KEY || '').trim()),
-    portalUrl: getSetting('kelviq_portal_url') || process.env.KELVIQ_PORTAL_URL || '',
+    stripeConfigured: Boolean(
+      (getSetting('stripe_secret_key') || process.env.STRIPE_SECRET_KEY || '').trim(),
+    ),
+    portalUrl: getSetting('stripe_portal_url') || process.env.STRIPE_PORTAL_URL || '',
   };
 }
 
@@ -283,19 +273,19 @@ export function assertEntitlement(feature?: EntitlementFeature, willRenderClip =
 
   if (willRenderClip && !ent.usage.unlimited && ent.usage.usedToday >= plan.daily_clip_limit) {
     throw new EntitlementError(
-      `Daily limit of ${plan.daily_clip_limit} clips reached on ${plan.name}. Upgrade to Pro or Ultra via Kelviq for unlimited rendering.`,
+      `Daily limit of ${plan.daily_clip_limit} clips reached on ${plan.name}. Upgrade to Pro or Ultra via Stripe for unlimited rendering.`,
       'DAILY_QUOTA_REACHED',
       'pro',
-      plan.id
+      plan.id,
     );
   }
 
   if (feature === 'auto_captions' && !plan.allow_auto_captions) {
     throw new EntitlementError(
-      'Auto Kinetic Captions require Pro or Ultra plan. Activate your Kelviq license key to unlock.',
+      'Auto Kinetic Captions require Pro or Ultra plan. Subscribe via Stripe or activate a license key to unlock.',
       'PLAN_UPGRADE_REQUIRED',
       'pro',
-      plan.id
+      plan.id,
     );
   }
   if (feature === 'audio_peak' && !plan.allow_audio_peak) {
@@ -303,7 +293,7 @@ export function assertEntitlement(feature?: EntitlementFeature, willRenderClip =
       'Audio Peak Hype Scanner requires Pro or Ultra plan.',
       'PLAN_UPGRADE_REQUIRED',
       'pro',
-      plan.id
+      plan.id,
     );
   }
   if (feature === 'virality_ai' && !plan.allow_virality_ai) {
@@ -311,7 +301,7 @@ export function assertEntitlement(feature?: EntitlementFeature, willRenderClip =
       'AI Virality Scoring requires Pro or Ultra plan.',
       'PLAN_UPGRADE_REQUIRED',
       'pro',
-      plan.id
+      plan.id,
     );
   }
   if (feature === 'watchlist' && !plan.allow_watchlist) {
@@ -319,7 +309,7 @@ export function assertEntitlement(feature?: EntitlementFeature, willRenderClip =
       'Multi-Stream Watchlist Scheduler requires the Ultra plan.',
       'PLAN_UPGRADE_REQUIRED',
       'ultra',
-      plan.id
+      plan.id,
     );
   }
   if (feature === 'custom_branding' && !plan.allow_custom_branding) {
@@ -327,21 +317,21 @@ export function assertEntitlement(feature?: EntitlementFeature, willRenderClip =
       'Custom Channel Watermark Branding requires the Ultra plan.',
       'PLAN_UPGRADE_REQUIRED',
       'ultra',
-      plan.id
+      plan.id,
     );
   }
 
   return ent;
 }
 
-function mapKelviqPlanIdentifier(identifier?: string | null, name?: string | null): PlanId {
+function mapStripePlanIdentifier(identifier?: string | null, name?: string | null): PlanId {
   const idLower = String(identifier ?? '').trim().toLowerCase();
   const nameLower = String(name ?? '').trim().toLowerCase();
   const plans = listPlans();
 
   if (idLower) {
     const exact = plans.find(
-      p => p.kelviq_plan_identifier && p.kelviq_plan_identifier.trim().toLowerCase() === idLower
+      (p) => p.stripe_price_id && p.stripe_price_id.trim().toLowerCase() === idLower,
     );
     if (exact) return exact.id;
   }
@@ -351,33 +341,9 @@ function mapKelviqPlanIdentifier(identifier?: string | null, name?: string | nul
   return 'free';
 }
 
-async function deactivatePreviousKelviqIfChanged(
-  newKey: string,
-  client?: Kelviq | null,
-): Promise<void> {
-  const current = getActiveLicenseRow();
-  if (
-    current.provider === 'kelviq' &&
-    current.license_key &&
-    current.license_key !== newKey &&
-    current.instance_id
-  ) {
-    const kelviq = client ?? getKelviqClient();
-    if (!kelviq) return;
-    try {
-      await kelviq.license.deactivate({
-        licenseKey: current.license_key,
-        instanceId: current.instance_id,
-      });
-    } catch (err) {
-      console.warn('[kelviq] Deactivate previous license warning:', err);
-    }
-  }
-}
-
 export async function activateLicenseKey(rawKey: string) {
   const key = rawKey.trim();
-  if (!key) throw new Error('License key is required');
+  if (!key) throw new Error('License key or Stripe Subscription ID is required');
 
   // 1. Check Admin-issued local keys first (VIP / manual keys)
   const local = db.prepare(`SELECT * FROM local_licenses WHERE license_key=?`).get(key) as any;
@@ -386,8 +352,6 @@ export async function activateLicenseKey(rawKey: string) {
     if (local.expires_on && Date.parse(local.expires_on) < Date.now()) {
       throw new Error('This license key has expired.');
     }
-
-    await deactivatePreviousKelviqIfChanged(key);
 
     const nowIso = new Date().toISOString();
     db.prepare(`
@@ -409,40 +373,75 @@ export async function activateLicenseKey(rawKey: string) {
       local.customer_email ?? '',
       local.expires_on ?? '',
       nowIso,
-      nowIso
+      nowIso,
     );
 
     return getActiveEntitlement();
   }
 
-  // 2. Activate via official Kelviq License SDK (/api/v1/)
-  const kelviq = getKelviqClient();
-  if (!kelviq) {
+  // 2. Activate using a live Stripe Checkout Session ID (cs_...) or Subscription ID (sub_...)
+  const stripe = getStripeClient();
+  if (!stripe) {
     throw new Error(
-      'Kelviq API Key is not configured yet in Admin Settings, and key was not found in local VIP keys.'
+      'Stripe Secret Key is not configured yet in Admin Settings, and key was not found in local VIP keys.',
     );
   }
 
-  const res = await kelviq.license.activate({
-    licenseKey: key,
-    instanceName: os.hostname(),
-    metadata: {
-      app: 'clipper-studio',
-      os: process.platform,
-    },
-  });
+  let subscriptionId = '';
+  let customerId = '';
+  let customerEmail = '';
+  let customerName = 'Stripe Subscriber';
+  let priceOrPlanHint = '';
+  let expiresOnIso = '';
 
-  if (!res.license?.enabled) {
-    throw new Error('Kelviq reports this license key is currently disabled.');
+  if (key.startsWith('cs_')) {
+    const session = await stripe.checkout.sessions.retrieve(key, {
+      expand: ['subscription', 'customer'],
+    });
+    if (session.payment_status !== 'paid' && session.status !== 'complete') {
+      throw new Error('Stripe Checkout session is not paid/complete yet.');
+    }
+    customerEmail = session.customer_details?.email || session.customer_email || '';
+    customerName = session.customer_details?.name || customerName;
+    customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id || '';
+    const subObj =
+      typeof session.subscription === 'object' && session.subscription
+        ? session.subscription
+        : null;
+    subscriptionId =
+      typeof session.subscription === 'string' ? session.subscription : subObj?.id || session.id;
+    priceOrPlanHint =
+      (session.metadata?.planId as string | undefined) ||
+      subObj?.items?.data?.[0]?.price?.id ||
+      'pro';
+    if (subObj && 'current_period_end' in subObj && typeof subObj.current_period_end === 'number') {
+      expiresOnIso = new Date(subObj.current_period_end * 1000).toISOString();
+    }
+  } else if (key.startsWith('sub_')) {
+    const sub = await stripe.subscriptions.retrieve(key, { expand: ['customer'] });
+    if (!['active', 'trialing'].includes(sub.status)) {
+      throw new Error(`Stripe subscription status is "${sub.status}" (expected active or trialing).`);
+    }
+    subscriptionId = sub.id;
+    customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id || '';
+    if (typeof sub.customer === 'object' && sub.customer && !('deleted' in sub.customer)) {
+      customerEmail = sub.customer.email || '';
+      customerName = sub.customer.name || customerName;
+    }
+    priceOrPlanHint =
+      (sub.metadata?.planId as string | undefined) || sub.items?.data?.[0]?.price?.id || 'pro';
+    const firstItem = sub.items?.data?.[0];
+    if (firstItem && 'current_period_end' in firstItem && typeof firstItem.current_period_end === 'number') {
+      expiresOnIso = new Date(firstItem.current_period_end * 1000).toISOString();
+    }
+  } else {
+    throw new Error(
+      'Unrecognized key format. Enter a local VIP key (CLIP-...) or Stripe Subscription/Session ID (sub_... / cs_...).',
+    );
   }
 
-  const activatedKey = res.license.licenseKey || key;
-  await deactivatePreviousKelviqIfChanged(activatedKey, kelviq);
-
-  const mappedPlanId = mapKelviqPlanIdentifier(
-    res.license.plan?.identifier ?? res.license.plan?.product?.identifier,
-    res.license.plan?.name
-  );
+  const mappedPlanId = mapStripePlanIdentifier(priceOrPlanHint, priceOrPlanHint);
+  const finalPlan: PlanId = mappedPlanId === 'free' ? 'pro' : mappedPlanId;
   const nowIso = new Date().toISOString();
 
   db.prepare(`
@@ -450,7 +449,7 @@ export async function activateLicenseKey(rawKey: string) {
       license_key = ?,
       instance_id = ?,
       plan_id = ?,
-      provider = 'kelviq',
+      provider = 'stripe',
       customer_email = ?,
       customer_name = ?,
       expires_on = ?,
@@ -458,26 +457,25 @@ export async function activateLicenseKey(rawKey: string) {
       activated_at = ?
     WHERE id = 'current'
   `).run(
-    activatedKey,
-    res.instanceId,
-    mappedPlanId,
-    res.license.customer?.email ?? '',
-    res.license.customer?.name ?? '',
-    res.expiresOn ?? res.license.expiresOn ?? '',
+    subscriptionId,
+    customerId || `stripe_${os.hostname()}`,
+    finalPlan,
+    customerEmail,
+    customerName,
+    expiresOnIso,
     nowIso,
-    res.activatedAt || nowIso
+    nowIso,
   );
 
-  // Record activation inside event log for Admin Dashboard visibility
   db.prepare(`
-    INSERT INTO kelviq_events (id, event_type, customer_email, license_key, plan_identifier, raw_json)
-    VALUES (?, 'license.activated', ?, ?, ?, ?)
+    INSERT INTO stripe_events (id, event_type, customer_email, license_key, plan_identifier, raw_json)
+    VALUES (?, 'subscription.activated', ?, ?, ?, ?)
   `).run(
     crypto.randomUUID(),
-    res.license.customer?.email ?? '',
-    maskLicenseKeyValue(key),
-    mappedPlanId,
-    JSON.stringify({ instanceId: res.instanceId, plan: res.license.plan?.name ?? mappedPlanId })
+    customerEmail,
+    maskLicenseKeyValue(subscriptionId),
+    finalPlan,
+    JSON.stringify({ subscriptionId, customerId, plan: finalPlan }),
   );
 
   return getActiveEntitlement();
@@ -498,10 +496,10 @@ export async function validateCurrentLicense(): Promise<boolean> {
     }
     return true;
   }
-  if (lic.provider !== 'kelviq' || !lic.license_key) return true;
+  if (lic.provider !== 'stripe' || !lic.license_key) return true;
 
-  const kelviq = getKelviqClient();
-  if (!kelviq) {
+  const stripe = getStripeClient();
+  if (!stripe) {
     const expMs = lic.expires_on ? Date.parse(lic.expires_on) : NaN;
     if (lic.plan_id !== 'free' && !Number.isNaN(expMs) && expMs < Date.now()) {
       resetToFreeLicense();
@@ -511,68 +509,36 @@ export async function validateCurrentLicense(): Promise<boolean> {
   }
 
   try {
-    const res = await kelviq.license.validate({
-      licenseKey: lic.license_key,
-      instanceId: lic.instance_id || null,
-    });
-    if (!res.valid) {
+    if (!lic.license_key.startsWith('sub_')) return true;
+    const sub = await stripe.subscriptions.retrieve(lic.license_key);
+    if (!['active', 'trialing'].includes(sub.status)) {
       resetToFreeLicense();
       return false;
     }
     const nowIso = new Date().toISOString();
-    const hasPlanInfo = Boolean(
-      res.license?.plan?.identifier ||
-      res.license?.plan?.product?.identifier ||
-      res.license?.plan?.name
-    );
-    const nextPlanId = hasPlanInfo
-      ? mapKelviqPlanIdentifier(
-          res.license?.plan?.identifier ?? res.license?.plan?.product?.identifier,
-          res.license?.plan?.name
-        )
-      : lic.plan_id;
-    const nextExpiresOn = res.license?.expiresOn !== undefined
-      ? (res.license.expiresOn ?? '')
-      : lic.expires_on;
+    const firstItem = sub.items?.data?.[0];
+    const nextExp =
+      firstItem && 'current_period_end' in firstItem && typeof firstItem.current_period_end === 'number'
+        ? new Date(firstItem.current_period_end * 1000).toISOString()
+        : lic.expires_on;
 
     db.prepare(`
       UPDATE active_license
-      SET plan_id = ?, expires_on = ?, last_validated_at = ?
+      SET expires_on = ?, last_validated_at = ?
       WHERE id = 'current'
-    `).run(nextPlanId, nextExpiresOn, nowIso);
+    `).run(nextExp, nowIso);
     return true;
   } catch (err: any) {
-    const status: number | undefined =
-      typeof err?.statusCode === 'number'
-        ? err.statusCode
-        : (typeof err?.response?.status === 'number' ? err.response.status : undefined);
-    if (status === 401 || status === 403 || status === 404) {
+    const status = err?.statusCode as number | undefined;
+    if (status === 401 || status === 404) {
       resetToFreeLicense();
       return false;
     }
-    if (status === undefined || status >= 500) {
-      // Transient network or 5xx error: keep active until next validation check
-      return true;
-    }
-    return false;
+    return true;
   }
 }
 
 export async function deactivateCurrentLicense() {
-  const lic = getActiveLicenseRow();
-  if (lic.provider === 'kelviq' && lic.license_key && lic.instance_id) {
-    const kelviq = getKelviqClient();
-    if (kelviq) {
-      try {
-        await kelviq.license.deactivate({
-          licenseKey: lic.license_key,
-          instanceId: lic.instance_id,
-        });
-      } catch (err) {
-        console.warn('[kelviq] Deactivate warning:', err);
-      }
-    }
-  }
   resetToFreeLicense();
   return getActiveEntitlement();
 }
@@ -597,6 +563,7 @@ export async function resolveCheckoutUrl(
   planId: string,
   customerEmail?: string,
   customerId?: string,
+  userUid?: string,
 ): Promise<string> {
   if (!planExists(planId)) {
     throw new Error(`Invalid plan ID: ${planId}`);
@@ -608,31 +575,80 @@ export async function resolveCheckoutUrl(
   const plan = getPlanById(planId);
   const cleanEmail = customerEmail?.trim() ?? '';
 
-  if (plan.kelviq_payment_link && /^https?:\/\//i.test(plan.kelviq_payment_link)) {
-    const url = new URL(plan.kelviq_payment_link);
-    if (cleanEmail) url.searchParams.set('email', cleanEmail);
+  if (plan.stripe_payment_link && /^https?:\/\//i.test(plan.stripe_payment_link)) {
+    const url = new URL(plan.stripe_payment_link);
+    if (cleanEmail) url.searchParams.set('prefilled_email', cleanEmail);
+    if (userUid) url.searchParams.set('client_reference_id', userUid);
     return url.toString();
   }
 
-  const kelviq = getKelviqClient();
-  if (kelviq && plan.kelviq_plan_identifier) {
-    const cleanCustomerId = customerId?.trim();
-    const session = await kelviq.checkout.createSession({
-      planIdentifier: plan.kelviq_plan_identifier,
-      chargePeriod: plan.billing_period === 'ONE_TIME'
-        ? 'ONE_TIME'
-        : (plan.billing_period === 'YEARLY' ? 'YEARLY' : 'MONTHLY'),
-      successUrl: `http://localhost:${process.env.CLIPPER_PORT ?? 4001}/?checkout=success&plan=${plan.id}`,
-      customerId: cleanCustomerId || null,
-      metadata: cleanEmail ? { customerEmail: cleanEmail, planId: plan.id } : { planId: plan.id },
-      defaultBillingCountry: 'PK',
+  const stripe = getStripeClient();
+  if (stripe) {
+    const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.CLIPPER_PORT ?? 4001}`).replace(/\/+$/, '');
+    const cleanPriceId = (plan.stripe_price_id || '').trim();
+    const isRealStripePrice = cleanPriceId.startsWith('price_');
+    const mode = plan.billing_period === 'ONE_TIME' ? 'payment' : 'subscription';
+
+    const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = isRealStripePrice
+      ? { price: cleanPriceId, quantity: 1 }
+      : {
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: Math.max(100, Math.round((plan.price_usd || 12) * 100)),
+            product_data: {
+              name: `Clipper Studio ${plan.name}`,
+              description: plan.tagline || 'AI Stream Clipping & Creator SaaS Subscription',
+            },
+            ...(mode === 'subscription'
+              ? {
+                  recurring: {
+                    interval: plan.billing_period === 'YEARLY' ? 'year' : 'month',
+                  },
+                }
+              : {}),
+          },
+        };
+
+    const session = await stripe.checkout.sessions.create({
+      mode,
+      line_items: [lineItem],
+      ...(customerId?.trim()
+        ? { customer: customerId.trim() }
+        : cleanEmail
+          ? { customer_email: cleanEmail }
+          : {}),
+      ...(userUid ? { client_reference_id: userUid } : {}),
+      success_url: `${appBaseUrl}/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appBaseUrl}/billing?checkout=cancelled`,
+      metadata: {
+        planId: plan.id,
+        ...(userUid ? { uid: userUid } : {}),
+        ...(cleanEmail ? { customerEmail: cleanEmail } : {}),
+      },
     });
-    if (session.checkoutUrl) return session.checkoutUrl;
+    if (session.url) return session.url;
   }
 
   throw new Error(
-    `No Kelviq Payment Link or Kelviq Plan ID configured for ${plan.name}. Set it in the Admin Dashboard (/admin).`
+    `Stripe Secret Key or Stripe Payment Link is not configured yet for ${plan.name}. Add STRIPE_SECRET_KEY or a Stripe Payment Link in Admin Settings.`,
   );
+}
+
+export async function resolveBillingPortalUrl(returnUrl?: string): Promise<string> {
+  const configuredPortal = (getSetting('stripe_portal_url') || process.env.STRIPE_PORTAL_URL || '').trim();
+  if (configuredPortal) return configuredPortal;
+
+  const stripe = getStripeClient();
+  const lic = getActiveLicenseRow();
+  if (stripe && lic.instance_id?.startsWith('cus_')) {
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: lic.instance_id,
+      return_url: returnUrl || 'http://localhost:3000/billing',
+    });
+    return portal.url;
+  }
+  throw new Error('Configure STRIPE_PORTAL_URL or complete a Stripe Checkout subscription first.');
 }
 
 export function generateAdminLicenseKey(
@@ -643,9 +659,8 @@ export function generateAdminLicenseKey(
 ) {
   const rand = crypto.randomBytes(6).toString('hex').toUpperCase();
   const key = `CLIP-${planId.toUpperCase()}-${rand.slice(0, 4)}-${rand.slice(4, 8)}-${rand.slice(8, 12)}`;
-  const expiresOn = expiresDays > 0
-    ? new Date(Date.now() + expiresDays * 86400_000).toISOString()
-    : '';
+  const expiresOn =
+    expiresDays > 0 ? new Date(Date.now() + expiresDays * 86400_000).toISOString() : '';
 
   db.prepare(`
     INSERT INTO local_licenses (license_key, plan_id, customer_email, note, active, expires_on)
@@ -655,16 +670,18 @@ export function generateAdminLicenseKey(
   return { license_key: key, plan_id: planId, customer_email: customerEmail, note, expires_on: expiresOn };
 }
 
-const WEBHOOK_REPLAY_WINDOW_MS = 5 * 60 * 1000;
-const REVOCATION_EVENT_TYPES = new Set([
-  'license.revoked',
-  'license.disabled',
-  'license.expired',
-  'license.deleted',
-  'subscription.cancelled',
-  'subscription.canceled',
-  'subscription.expired',
-  'subscription.revoked',
+const WEBHOOK_REPLAY_WINDOW_SEC = 300;
+const STRIPE_REVOCATION_EVENTS = new Set([
+  'customer.subscription.deleted',
+  'customer.subscription.paused',
+  'charge.refunded',
+  'invoice.payment_failed',
+]);
+const STRIPE_ACTIVATION_EVENTS = new Set([
+  'checkout.session.completed',
+  'customer.subscription.created',
+  'customer.subscription.updated',
+  'invoice.paid',
 ]);
 
 function getHeaderValue(
@@ -680,97 +697,118 @@ function getHeaderValue(
   return undefined;
 }
 
-function assertWebhookTimestampFresh(
-  headers: Record<string, string | string[] | undefined>,
-): void {
-  const rawTs = getHeaderValue(headers, 'webhook-timestamp')?.trim() ?? '';
-  let tsMs = NaN;
-  if (/^\d+(?:\.\d+)?$/.test(rawTs)) {
-    const num = Number(rawTs);
-    tsMs = num > 1e12 ? num : num * 1000;
-  } else if (rawTs) {
-    tsMs = Date.parse(rawTs);
-  }
-  if (!Number.isFinite(tsMs)) {
-    throw new WebhookVerificationError('Invalid webhook-timestamp header.');
-  }
-  if (Math.abs(Date.now() - tsMs) > WEBHOOK_REPLAY_WINDOW_MS) {
-    throw new WebhookVerificationError('Webhook timestamp outside 5-minute replay freshness window.');
-  }
-}
-
-export function handleKelviqWebhook(
+export function handleStripeWebhook(
   rawBody: Buffer | string,
   headers: Record<string, string | string[] | undefined>,
 ) {
   const bodyStr = Buffer.isBuffer(rawBody)
     ? rawBody.toString('utf8')
-    : (typeof rawBody === 'string' ? rawBody : '');
+    : typeof rawBody === 'string'
+      ? rawBody
+      : '';
   if (!bodyStr.trim()) {
-    throw new WebhookVerificationError('Webhook request body must not be empty.');
+    throw new StripeWebhookVerificationError('Webhook request body must not be empty.');
   }
 
-  const webhookSecret = getSetting('kelviq_webhook_secret') || process.env.KELVIQ_WEBHOOK_SECRET || '';
+  const webhookSecret = (
+    getSetting('stripe_webhook_secret') ||
+    process.env.STRIPE_WEBHOOK_SECRET ||
+    ''
+  ).trim();
+
   let parsed: Record<string, any>;
 
-  if (webhookSecret.trim()) {
-    try {
-      parsed = validateEvent(rawBody, headers, webhookSecret.trim()) as Record<string, any>;
-    } catch (err) {
-      if (err instanceof WebhookVerificationError) {
-        throw err;
-      }
-      throw new WebhookVerificationError('Webhook verification failed');
+  if (webhookSecret) {
+    const sig = getHeaderValue(headers, 'stripe-signature');
+    if (!sig) {
+      throw new StripeWebhookVerificationError('Missing stripe-signature header.');
     }
-    assertWebhookTimestampFresh(headers);
-  } else if (process.env.KELVIQ_ALLOW_UNSIGNED_WEBHOOKS === 'true') {
+    const stripe = getStripeClient() ?? new Stripe('sk_test_webhook_verify_only');
+    try {
+      parsed = stripe.webhooks.constructEvent(
+        rawBody,
+        sig,
+        webhookSecret,
+        WEBHOOK_REPLAY_WINDOW_SEC,
+      ) as unknown as Record<string, any>;
+    } catch (err: any) {
+      throw new StripeWebhookVerificationError(err?.message || 'Stripe signature verification failed');
+    }
+  } else if (process.env.STRIPE_ALLOW_UNSIGNED_WEBHOOKS === 'true') {
     const rawJson = JSON.parse(bodyStr);
     if (!rawJson || typeof rawJson !== 'object' || Array.isArray(rawJson)) {
       throw new Error('Webhook JSON payload must be an object.');
     }
     parsed = rawJson as Record<string, any>;
   } else {
-    throw new WebhookVerificationError(
-      'Kelviq webhook secret is not configured. Configure KELVIQ_WEBHOOK_SECRET in Admin Settings before accepting webhooks.'
+    throw new StripeWebhookVerificationError(
+      'Stripe webhook secret is not configured. Configure STRIPE_WEBHOOK_SECRET in Admin Settings before accepting webhooks.',
     );
   }
 
-  const eventType = String(parsed.type ?? parsed.event ?? 'kelviq.event');
-  const data = parsed.data ?? parsed;
-  const email = String(data?.customer?.email ?? data?.customerEmail ?? '');
-  const rawKey = String(
-    data?.license?.licenseKey ??
-    data?.licenseKey ??
-    data?.license_key ??
-    data?.object?.licenseKey ??
-    data?.object?.license?.licenseKey ??
-    ''
-  ).trim();
-  const maskedKey = rawKey ? maskLicenseKeyValue(rawKey) : '';
-  const planId = String(data?.plan?.identifier ?? data?.planIdentifier ?? '');
-  const amount = data?.amount !== undefined ? `${data.amount} ${data.currencyCode ?? 'USD'}` : '';
+  const eventType = String(parsed.type ?? 'stripe.event');
+  const obj = (parsed.data?.object ?? {}) as Record<string, any>;
+  const email = String(
+    obj.customer_details?.email ?? obj.customer_email ?? obj.receipt_email ?? obj.metadata?.customerEmail ?? '',
+  );
+  const subOrKeyId = String(obj.subscription ?? obj.id ?? '');
+  const customerId = String(obj.customer ?? '');
+  const planIdRaw = String(obj.metadata?.planId ?? obj.items?.data?.[0]?.price?.id ?? '');
+  const mappedPlanId = mapStripePlanIdentifier(planIdRaw, planIdRaw);
+  const amountNum =
+    typeof obj.amount_total === 'number'
+      ? obj.amount_total
+      : typeof obj.amount_paid === 'number'
+        ? obj.amount_paid
+        : typeof obj.amount === 'number'
+          ? obj.amount
+          : undefined;
+  const amount =
+    amountNum !== undefined
+      ? `${(amountNum / 100).toFixed(2)} ${String(obj.currency ?? 'usd').toUpperCase()}`
+      : '';
 
-  if (REVOCATION_EVENT_TYPES.has(eventType.trim().toLowerCase()) && rawKey) {
+  if (STRIPE_ACTIVATION_EVENTS.has(eventType)) {
+    const targetPlan: PlanId = mappedPlanId === 'free' ? 'pro' : mappedPlanId;
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      UPDATE active_license SET
+        license_key = COALESCE(NULLIF(?, ''), license_key),
+        instance_id = COALESCE(NULLIF(?, ''), instance_id),
+        plan_id = ?,
+        provider = 'stripe',
+        customer_email = COALESCE(NULLIF(?, ''), customer_email),
+        customer_name = 'Stripe Subscriber',
+        last_validated_at = ?,
+        activated_at = COALESCE(NULLIF(activated_at, ''), ?)
+      WHERE id = 'current'
+    `).run(subOrKeyId, customerId, targetPlan, email, nowIso, nowIso);
+  } else if (STRIPE_REVOCATION_EVENTS.has(eventType)) {
     const current = getActiveLicenseRow();
-    if (current.license_key && current.license_key === rawKey) {
+    if (
+      !subOrKeyId ||
+      current.license_key === subOrKeyId ||
+      (customerId && current.instance_id === customerId)
+    ) {
       resetToFreeLicense();
     }
   }
 
+  const maskedKey = subOrKeyId ? maskLicenseKeyValue(subOrKeyId) : '';
   const sanitizedPayload = redactLicenseKeysInObject(parsed);
 
   db.prepare(`
-    INSERT INTO kelviq_events (id, event_type, customer_email, license_key, plan_identifier, amount, raw_json)
+    INSERT INTO stripe_events (id, event_type, customer_email, license_key, plan_identifier, amount, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     crypto.randomUUID(),
     eventType,
     email,
     maskedKey,
-    planId,
+    mappedPlanId,
     amount,
-    JSON.stringify(sanitizedPayload)
+    JSON.stringify(sanitizedPayload),
   );
 
-  return { ok: true, eventType };
+  return { ok: true, eventType, planId: mappedPlanId };
 }
