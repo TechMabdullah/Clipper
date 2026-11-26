@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import { INBOX } from './storage.js';
 
 const YTDLP = process.env.YTDLP_BIN_PATH ?? 'yt-dlp';
+const FFPROBE = process.env.FFPROBE_BIN_PATH ?? 'ffprobe';
+const FFPROBE_TIMEOUT_MS = 20_000;
 
 /**
  * Downloads a URL to 01_inbox/ using yt-dlp.
@@ -13,18 +15,20 @@ export function downloadUrl(url: string, jobId: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const outTemplate = path.join(INBOX, `${jobId}.%(ext)s`);
     const args = [
-      url,
       '--output', outTemplate,
       '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--quiet',
       '--progress',
+      '--',
+      url,
     ];
 
     console.log(`[downloader] yt-dlp ${url}`);
     const proc = spawn(YTDLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
+    proc.on('error', reject);
     proc.stderr.on('data', (d) => process.stderr.write(d));
     proc.on('close', (code) => {
       if (code !== 0) return reject(new Error(`yt-dlp exited ${code}`));
@@ -42,19 +46,39 @@ export function downloadUrl(url: string, jobId: string): Promise<string> {
  */
 export function probeDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('ffprobe', [
-      '-v', 'quiet',
-      '-print_format', 'json',
-      '-show_format',
-      filePath,
-    ]);
+    const proc = spawn(
+      FFPROBE,
+      ['-v', 'quiet', '-print_format', 'json', '-show_format', '-i', filePath],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
     let out = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      try { proc.kill(); } catch {}
+      if (!settled) {
+        settled = true;
+        reject(new Error('ffprobe timed out'));
+      }
+    }, FFPROBE_TIMEOUT_MS);
+
     proc.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
     proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       if (code !== 0) return reject(new Error('ffprobe failed'));
       try {
-        const j = JSON.parse(out) as { format: { duration: string } };
-        resolve(parseFloat(j.format.duration));
+        const j = JSON.parse(out) as { format?: { duration?: string } };
+        const parsed = parseFloat(j.format?.duration ?? '');
+        if (!Number.isFinite(parsed)) return reject(new Error('ffprobe missing duration'));
+        resolve(parsed);
       } catch {
         reject(new Error('ffprobe JSON parse failed'));
       }

@@ -94,16 +94,39 @@ function ruleBasedStubSegments(totalSec: number): Segment[] {
 }
 
 async function probeDuration(filePath: string): Promise<number> {
+  const ffprobe = process.env.FFPROBE_BIN_PATH || 'ffprobe';
   return new Promise((resolve) => {
-    const proc = spawn('ffprobe', [
-      '-v', 'quiet', '-print_format', 'json', '-show_format', filePath,
-    ], { stdio: 'pipe' });
+    const proc = spawn(
+      ffprobe,
+      ['-v', 'quiet', '-print_format', 'json', '-show_format', '-i', filePath],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
     let out = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      try { proc.kill(); } catch {}
+      if (!settled) {
+        settled = true;
+        resolve(90);
+      }
+    }, 20_000);
+
     proc.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    proc.on('error', () => {
+      clearTimeout(timer);
+      if (!settled) {
+        settled = true;
+        resolve(90);
+      }
+    });
     proc.on('close', () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       try {
-        const j = JSON.parse(out) as { format: { duration: string } };
-        resolve(parseFloat(j.format.duration));
+        const j = JSON.parse(out) as { format?: { duration?: string } };
+        const val = parseFloat(j.format?.duration ?? '');
+        resolve(Number.isFinite(val) && val > 0 ? val : 90);
       } catch {
         resolve(90); // safe fallback
       }

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upgrade Plan — Clipper Studio</title>
+  <style>
+    :root {
+      --bg: #09090b; --surface: #14141a; --card: #181820; --border: #272732;
+      --text: #f4f4f5; --muted: #a1a1aa; --accent: #8b5cf6; --accent-h: #7c3aed;
+      --cyan: #06b6d4; --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 48px 16px; }
+
+    .back-link { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 13px; margin-bottom: 32px; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); transition: all 0.15s; max-width: 1200px; width: 100%; }
+    .back-link:hover { color: var(--text); border-color: #444; }
+
+    header { text-align: center; margin-bottom: 44px; }
+    .logo { width: 52px; height: 52px; background: linear-gradient(135deg, var(--accent), var(--cyan)); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 20px; box-shadow: 0 8px 32px rgba(139,92,246,0.4); }
+    h1 { font-size: 36px; font-weight: 900; letter-spacing: -1px; background: linear-gradient(90deg, #fff 60%, #c4b5fd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .subtitle { color: var(--muted); font-size: 16px; margin-top: 10px; max-width: 520px; }
+
+    /* Current plan banner */
+    .current-plan-banner { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 28px; margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; max-width: 1000px; width: 100%; }
+    .current-label { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+    .current-plan-name { font-size: 22px; font-weight: 800; margin-top: 2px; }
+    .plan-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; }
+    .plan-badge.free { background: #272732; color: #d4d4d8; }
+    .plan-badge.pro  { background: rgba(139,92,246,0.2); color: #c4b5fd; }
+    .plan-badge.ultra{ background: rgba(6,182,212,0.2); color: #67e8f9; }
+
+    /* Customer checkout email bar */
+    .checkout-email-bar { max-width: 1000px; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 20px; margin-bottom: 28px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .checkout-email-bar label { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .checkout-email-bar input[type="email"] { flex: 1; min-width: 240px; max-width: 380px; background: #121218; border: 1px solid #30303c; color: var(--text); padding: 9px 13px; border-radius: 8px; font-size: 13.5px; outline: none; }
+    .checkout-email-bar input[type="email"]:focus { border-color: var(--accent); }
+
+    /* Pricing grid */
+    .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1000px; width: 100%; margin-bottom: 18px; }
+    .plan-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 32px 28px; display: flex; flex-direction: column; gap: 0; position: relative; transition: transform 0.15s, border-color 0.15s; }
+    .plan-card:hover { transform: translateY(-2px); }
+    .plan-card.highlighted { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 16px 48px rgba(139,92,246,0.18); }
+    .plan-card.current-active { border-color: var(--green); }
+    .popular-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg, var(--accent), var(--cyan)); color: #fff; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 999px; letter-spacing: 0.5px; white-space: nowrap; }
+    .plan-name { font-size: 20px; font-weight: 800; }
+    .plan-tagline { font-size: 13px; color: var(--muted); margin-top: 4px; margin-bottom: 20px; min-height: 36px; }
+    .plan-price { font-size: 42px; font-weight: 900; letter-spacing: -1.5px; }
+    .plan-price span { font-size: 16px; font-weight: 500; color: var(--muted); }
+    .plan-period { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 24px; }
+    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 10px; flex: 1; margin-bottom: 28px; }
+    .plan-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; color: #d4d4d8; }
+    .plan-features li .feat-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+    .plan-features li.locked { color: #52525b; }
+
+    .btn { width: 100%; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn-upgrade { background: linear-gradient(90deg, var(--accent), #7e3fdb); color: #fff; }
+    .btn-upgrade:hover { background: linear-gradient(90deg, var(--accent-h), #6d35c0); }
+    .btn-ultra { background: linear-gradient(90deg, #0891b2, var(--cyan)); color: #fff; }
+    .btn-ultra:hover { background: linear-gradient(90deg, #0e7490, #0891b2); }
+    .btn-current { background: rgba(34,197,94,0.1); border: 1px solid var(--green); color: var(--green); cursor: default; }
+    .btn-secondary { background: #262632; border: 1px solid #343442; color: var(--text); }
+    .btn-secondary:hover { background: #333342; }
+
+    /* License key activation section */
+    .activate-section { max-width: 680px; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-top: 24px; margin-bottom: 36px; }
+    .activate-section h2 { font-size: 17px; font-weight: 800; margin-bottom: 6px; }
+    .activate-section p { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+    .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type="text"] { flex: 1; min-width: 220px; background: #121218; border: 1px solid #30303c; color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; outline: none; }
+    input[type="text"]:focus { border-color: var(--accent); }
+    .btn-sm { padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; background: var(--accent); color: #fff; white-space: nowrap; transition: background 0.15s; }
+    .btn-sm:hover { background: var(--accent-h); }
+    .btn-sm-sec { background: #262632; border: 1px solid #343442; color: var(--text); }
+    .btn-sm-sec:hover { background: #333342; }
+
+    .msg { margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; display: none; }
+    .msg.ok  { background: rgba(34,197,94,0.14); border: 1px solid rgba(34,197,94,0.3); color: var(--green); }
+    .msg.err { background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+
+    /* FAQ */
+    .faq { max-width: 680px; width: 100%; margin-bottom: 40px; }
+    .faq h2 { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+    .faq-item { border-bottom: 1px solid var(--border); padding: 16px 0; }
+    .faq-q { font-size: 14px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .faq-a { font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.6; display: none; }
+    .faq-item.open .faq-a { display: block; }
+    .faq-item.open .faq-arrow { transform: rotate(180deg); }
+    .faq-arrow { transition: transform 0.2s; font-size: 12px; }
+
+    /* Updater Section */
+    .updater-section { max-width: 680px; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 26px; margin-bottom: 36px; }
+    .updater-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .updater-header h2 { font-size: 17px; font-weight: 800; }
+    .version-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
+    .version-pill { background: #121218; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; color: var(--text); font-weight: 600; }
+    .cmd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .cmd-box { background: #121218; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+    .cmd-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); font-weight: 700; margin-bottom: 8px; }
+    .cmd-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .cmd-row code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; color: #c4b5fd; background: #1c1c26; padding: 4px 8px; border-radius: 6px; }
+
+    .footer-note { font-size: 12px; color: var(--muted); text-align: center; }
+    .footer-note a { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <a href="/" class="back-link" id="backLink">← Back to Dashboard</a>
+
+  <header>
+    <div class="logo">🎬</div>
+    <h1>Upgrade Clipper Studio</h1>
+    <p class="subtitle">Unlock more AI features, higher resolution, and unlimited clips.</p>
+  </header>
+
+  <!-- Current plan indicator -->
+  <div class="current-plan-banner">
+    <div>
+      <div class="current-label">Your Current Plan</div>
+      <div class="current-plan-name" id="currentPlanName">Loading…</div>
+      <div style="margin-top:6px;" id="currentPlanDetails"></div>
+    </div>
+    <div id="currentPlanBadgeWrap"></div>
+  </div>
+
+  <!-- Optional customer email for Kelviq checkout -->
+  <div class="checkout-email-bar">
+    <label for="checkoutEmailInput">📧 Optional Customer Email (pre-fills Kelviq checkout &amp; receipt):</label>
+    <input type="email" id="checkoutEmailInput" placeholder="creator@example.com" autocomplete="email">
+  </div>
+
+  <!-- Pricing Cards -->
+  <div class="plans-grid" id="plansGrid">
+    <!-- Cards injected by JS from /api/billing/status -->
+  </div>
+  <div class="msg" id="upgradeMsg" style="max-width:1000px; width:100%;"></div>
+
+  <!-- License key activation -->
+  <div class="activate-section">
+    <h2>🔑 Already purchased? Activate your license</h2>
+    <p>Enter the license key that was emailed to you after your Kelviq payment.</p>
+    <div class="input-row">
+      <input type="text" id="licenseKeyInput" placeholder="CLIP-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+      <button type="button" class="btn-sm" id="activateBtn">Activate</button>
+    </div>
+    <div class="msg" id="activateMsg"></div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item" data-faq>
+      <div class="faq-q">What payment methods are supported? <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Clipper Studio uses <strong>Kelviq</strong> as the payment processor, which supports credit/debit cards (Visa, Mastercard, Amex), and many local Pakistani payment methods including Easypaisa and JazzCash. Payments are charged in USD at the prevailing PKR exchange rate.</div>
+    </div>
+
+    <div class="faq-item" data-faq>
+      <div class="faq-q">How do I get my license key after paying? <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">After completing the Kelviq checkout, your license key is emailed to you within 1–5 minutes. Paste it into the "Activate your license" box above. If you don't receive it after 10 minutes, check your spam folder or contact support.</div>
+    </div>
+
+    <div class="faq-item" data-faq>
+      <div class="faq-q">Can I upgrade from Pro to Ultra? <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Yes! Click the "Upgrade to Ultra" button above. After payment, you'll receive a new Ultra license key. Activate it on this page — your Pro license will be automatically replaced.</div>
+    </div>
+
+    <div class="faq-item" data-faq>
+      <div class="faq-q">Is there a refund policy? <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Yes — 7-day money-back guarantee. If Clipper Studio doesn't work for your setup, contact us within 7 days of purchase for a full refund through Kelviq.</div>
+    </div>
+
+    <div class="faq-item" data-faq>
+      <div class="faq-q">Can I use one license on multiple machines? <span class="faq-arrow">▾</span></div>
+      <div class="faq-a">Each license key is for one installation. Pro licenses allow 2 activations (e.g. laptop + desktop), Ultra allows 3 activations. Contact support to transfer a license.</div>
+    </div>
+  </div>
+
+  <!-- Updating the Tool Software -->
+  <div class="updater-section" id="updaterSection">
+    <div class="updater-header">
+      <h2>🔄 Updating the Tool Software (<code>update.ps1</code> / <code>update.sh</code>)</h2>
+      <button type="button" class="btn-sm btn-sm-sec" id="btnCheckVersion">Check Upstream Updates</button>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
+      Keep Clipper Studio up to date safely with automatic SQLite &amp; <code>.env.local</code> backups before pulling changes.
+    </p>
+    <div class="version-meta">
+      <span class="version-pill" id="sysVersionText">Version: checking…</span>
+      <span class="version-pill" id="sysCommitText">Commit: —</span>
+      <span class="version-pill" id="sysBranchText">Branch: —</span>
+      <span id="sysUpdateStatus" style="font-weight:600;"></span>
+    </div>
+    <div class="cmd-grid">
+      <div class="cmd-box">
+        <div class="cmd-label">Windows (PowerShell)</div>
+        <div class="cmd-row">
+          <code>.\update.ps1</code>
+          <button type="button" class="btn-sm btn-sm-sec" data-copy-cmd=".\update.ps1">Copy</button>
+        </div>
+      </div>
+      <div class="cmd-box">
+        <div class="cmd-label">macOS / Linux (Bash)</div>
+        <div class="cmd-row">
+          <code>./update.sh</code>
+          <button type="button" class="btn-sm btn-sm-sec" data-copy-cmd="./update.sh">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="msg" id="updaterMsg"></div>
+  </div>
+
+  <p class="footer-note">Payments processed securely by <a href="https://kelviq.com" target="_blank" rel="noopener noreferrer">Kelviq</a> — Merchant of Record for Pakistan &amp; global.</p>
+
+<script>
+(function () {
+  'use strict';
+
+  const API = '';  // same-origin
+
+  // Fallback plan definitions if API is temporarily unreachable
+  const FALLBACK_PLANS = [
+    {
+      id: 'free',
+      name: 'Free Starter',
+      price_usd: 0,
+      billing_period: 'MONTHLY',
+      daily_clip_limit: 3,
+      max_resolution: 720,
+      watermark_enabled: 1,
+      allow_auto_captions: 0,
+      allow_audio_peak: 0,
+      allow_virality_ai: 0,
+      allow_watchlist: 0,
+      allow_custom_branding: 0,
+      tagline: 'Explore live chat velocity & manual stream clipping',
+    },
+    {
+      id: 'pro',
+      name: 'Pro Creator',
+      price_usd: 12,
+      billing_period: 'MONTHLY',
+      daily_clip_limit: -1,
+      max_resolution: 1080,
+      watermark_enabled: 0,
+      allow_auto_captions: 1,
+      allow_audio_peak: 1,
+      allow_virality_ai: 1,
+      allow_watchlist: 0,
+      allow_custom_branding: 0,
+      tagline: 'Unlimited 1080p clipping with AI captions & audio peaks',
+    },
+    {
+      id: 'ultra',
+      name: 'Ultra Studio',
+      price_usd: 29,
+      billing_period: 'MONTHLY',
+      daily_clip_limit: -1,
+      max_resolution: 1080,
+      watermark_enabled: 0,
+      allow_auto_captions: 1,
+      allow_audio_peak: 1,
+      allow_virality_ai: 1,
+      allow_watchlist: 1,
+      allow_custom_branding: 1,
+      tagline: 'Full AI SaaS suite with watchlist, branding & priority power',
+    },
+  ];
+
+  let currentPlanId = 'free';
+  let loadedPlans = FALLBACK_PLANS;
+
+  function escHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  function safeExternalUrl(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    try {
+      const parsed = new URL(raw);
+      return (parsed.protocol === 'https:' || parsed.protocol === 'http:') ? parsed.toString() : '';
+    } catch {
+      return '';
+    }
+  }
+
+  async function fetchJson(url, opts = {}) {
+    const headers = Object.assign({ 'X-Clipper-CSRF': '1' }, opts.headers || {});
+    try {
+      const res = await fetch(url, { ...opts, headers });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      return { res, data };
+    } catch {
+      return { res: null, data: null };
+    }
+  }
+
+  async function copyToClipboard(text) {
+    const val = String(text ?? '');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(val);
+        return true;
+      } catch {}
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function buildPlanFeatures(plan) {
+    const dailyLimit = Number(plan.daily_clip_limit ?? 3);
+    const maxRes = Number(plan.max_resolution ?? 720);
+    const watermarkOn = Boolean(plan.watermark_enabled);
+    const autoCaptions = Boolean(plan.allow_auto_captions);
+    const audioPeak = Boolean(plan.allow_audio_peak);
+    const viralityAi = Boolean(plan.allow_virality_ai);
+    const watchlist = Boolean(plan.allow_watchlist);
+    const customBranding = Boolean(plan.allow_custom_branding);
+
+    return [
+      {
+        icon: '✅',
+        text: dailyLimit < 0 ? 'Unlimited clips per day' : `${dailyLimit} clips per day`,
+        locked: false,
+      },
+      {
+        icon: '✅',
+        text: maxRes >= 1080 ? `${maxRes}p60 max resolution` : `${maxRes}p max resolution`,
+        locked: false,
+      },
+      {
+        icon: watermarkOn ? '⚠️' : '✅',
+        text: watermarkOn ? 'Default Clipper Studio watermark' : 'Watermark removed',
+        locked: false,
+      },
+      {
+        icon: autoCaptions ? '✅' : '🔒',
+        text: autoCaptions ? 'AI Kinetic Captions (Hormozi, Neon, Minimal)' : 'AI Kinetic Captions',
+        locked: !autoCaptions,
+      },
+      {
+        icon: audioPeak ? '✅' : '🔒',
+        text: audioPeak ? 'Audio Peak Hype Scanner + Batch Auto-Clip' : 'Audio Peak Scanner',
+        locked: !audioPeak,
+      },
+      {
+        icon: viralityAi ? '✅' : '🔒',
+        text: viralityAi ? 'Virality AI Score + Social Metadata' : 'Virality AI Score',
+        locked: !viralityAi,
+      },
+      {
+        icon: watchlist ? '✅' : '🔒',
+        text: watchlist ? 'Multi-Stream Watchlist (auto-clip when live)' : 'Multi-Stream Watchlist',
+        locked: !watchlist,
+      },
+      {
+        icon: customBranding ? '✅' : '🔒',
+        text: customBranding ? 'Custom Branding / White-label watermark' : 'Custom Branding / White-label',
+        locked: !customBranding,
+      },
+    ];
+  }
+
+  function formatBillingDisplay(priceUsd, billingPeriod) {
+    const price = Number(priceUsd ?? 0);
+    const period = String(billingPeriod ?? 'MONTHLY').toUpperCase();
+    const priceFormatted = Number.isInteger(price) ? String(price) : price.toFixed(2);
+
+    if (price <= 0) {
+      return { priceHtml: '$0<span></span>', periodLabel: 'Free forever · No credit card needed' };
+    }
+    if (period === 'ONE_TIME') {
+      return { priceHtml: `$${escHtml(priceFormatted)}<span> lifetime</span>`, periodLabel: 'One-time payment · Lifetime access' };
+    }
+    if (period === 'YEARLY') {
+      return { priceHtml: `$${escHtml(priceFormatted)}<span>/yr</span>`, periodLabel: 'Billed yearly · Cancel anytime' };
+    }
+    return { priceHtml: `$${escHtml(priceFormatted)}<span>/mo</span>`, periodLabel: 'Billed monthly · Cancel anytime' };
+  }
+
+  async function loadCurrentPlan() {
+    const { data } = await fetchJson(`${API}/api/billing/status`);
+    const activePlan = data?.entitlement?.plan ?? {};
+    currentPlanId = String(activePlan.id ?? 'free');
+    const name = activePlan.name ?? currentPlanId;
+
+    document.getElementById('currentPlanName').textContent = name;
+    const badgeEl = document.getElementById('currentPlanBadgeWrap');
+    badgeEl.innerHTML = `<span class="plan-badge ${escHtml(currentPlanId)}">${escHtml(currentPlanId.toUpperCase())}</span>`;
+
+    const details = document.getElementById('currentPlanDetails');
+    const exp = data?.entitlement?.license?.expires_on ?? '';
+    const maskedKey = data?.entitlement?.license?.maskedKey ?? '';
+    const detailParts = [];
+    if (maskedKey) {
+      detailParts.push(`Key: ${maskedKey}`);
+    }
+    if (exp) {
+      const d = new Date(exp);
+      detailParts.push(`Renews / expires: ${Number.isNaN(d.getTime()) ? exp : d.toLocaleDateString()}`);
+    } else if (currentPlanId !== 'free') {
+      detailParts.push('Lifetime / Active license');
+    }
+    details.innerHTML = detailParts.length
+      ? `<span style="font-size:12px;color:var(--muted);">${escHtml(detailParts.join(' · '))}</span>`
+      : '';
+
+    loadedPlans = (Array.isArray(data?.plans) && data.plans.length > 0) ? data.plans : FALLBACK_PLANS;
+    renderPlans();
+  }
+
+  async function resolveUpgradeUrl(planId, email) {
+    // Primary: GET /api/licensing/upgrade-link?plan=...
+    const { res: linkRes, data: linkData } = await fetchJson(
+      `${API}/api/licensing/upgrade-link?plan=${encodeURIComponent(planId)}`
+    );
+    if (linkRes && linkRes.ok && linkData?.url) {
+      let url = safeExternalUrl(linkData.url);
+      if (url && email) {
+        try {
+          const parsed = new URL(url);
+          if (!parsed.searchParams.has('email')) parsed.searchParams.set('email', email);
+          url = parsed.toString();
+        } catch {}
+      }
+      if (url) return { url, error: '' };
+    }
+
+    // Fallback when 404 / failure: POST /api/billing/checkout { planId, email }
+    const payload = email ? { planId, email } : { planId };
+    const { res: chkRes, data: chkData } = await fetchJson(`${API}/api/billing/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (chkRes && chkRes.ok && chkData?.checkoutUrl) {
+      const url = safeExternalUrl(chkData.checkoutUrl);
+      if (url) return { url, error: '' };
+    }
+
+    return {
+      url: '',
+      error: chkData?.error || linkData?.error || 'No payment link or Kelviq checkout configured for this plan yet. Set it in /admin.',
+    };
+  }
+
+  function renderPlans() {
+    const grid = document.getElementById('plansGrid');
+    grid.innerHTML = '';
+
+    for (const plan of loadedPlans) {
+      const planId = String(plan.id || '');
+      const planName = String(plan.name || planId.toUpperCase());
+      const isCurrent = planId === currentPlanId;
+      const isDowngrade = (currentPlanId === 'ultra' && planId !== 'ultra') ||
+                          (currentPlanId === 'pro'   && planId === 'free');
+      const isPopular = planId === 'pro';
+      const { priceHtml, periodLabel } = formatBillingDisplay(plan.price_usd, plan.billing_period);
+      const features = buildPlanFeatures(plan);
+
+      const card = document.createElement('div');
+      card.className = `plan-card ${isPopular ? 'highlighted' : ''} ${isCurrent ? 'current-active' : ''}`;
+
+      const featureHtml = features.map(f =>
+        `<li class="${f.locked ? 'locked' : ''}"><span class="feat-icon">${escHtml(f.icon)}</span>${escHtml(f.text)}</li>`
+      ).join('');
+
+      let btnHtml;
+      if (isCurrent) {
+        btnHtml = `<button type="button" class="btn btn-current" disabled>✓ Current Plan</button>`;
+      } else if (planId === 'free' || Number(plan.price_usd ?? 0) <= 0) {
+        btnHtml = `<button type="button" class="btn btn-secondary" disabled>Free — no payment needed</button>`;
+      } else {
+        const btnClass = planId === 'ultra' ? 'btn-ultra' : 'btn-upgrade';
+        const label = isDowngrade ? `Switch to ${planName}` : `Upgrade to ${planName}`;
+        btnHtml = `<button type="button" class="btn ${btnClass}" data-upgrade="${escHtml(planId)}" data-plan-name="${escHtml(planName)}">${escHtml(label)} →</button>`;
+      }
+
+      card.innerHTML = `
+        ${isPopular ? '<div class="popular-badge">⚡ Most Popular</div>' : ''}
+        <div class="plan-name">${escHtml(planName)}</div>
+        <div class="plan-tagline">${escHtml(plan.tagline || '')}</div>
+        <div class="plan-price">${priceHtml}</div>
+        <div class="plan-period">${escHtml(periodLabel)}</div>
+        <ul class="plan-features">${featureHtml}</ul>
+        ${btnHtml}
+      `;
+
+      grid.appendChild(card);
+    }
+  }
+
+  async function loadSystemVersion(checkRemote = false) {
+    const versionEl = document.getElementById('sysVersionText');
+    const commitEl = document.getElementById('sysCommitText');
+    const branchEl = document.getElementById('sysBranchText');
+    const statusEl = document.getElementById('sysUpdateStatus');
+    const btn = document.getElementById('btnCheckVersion');
+
+    if (checkRemote && btn) {
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+    }
+
+    const url = checkRemote ? `${API}/api/system/version?checkRemote=1` : `${API}/api/system/version`;
+    const { res, data } = await fetchJson(url);
+
+    if (checkRemote && btn) {
+      btn.disabled = false;
+      btn.textContent = 'Check Upstream Updates';
+    }
+
+    if (!res || !res.ok || !data) {
+      versionEl.textContent = 'Version: unavailable';
+      return;
+    }
+
+    const ver = data.version || data.packageVersion || '0.0.1';
+    const commit = data.shortCommit || data.commit || data.sha || 'unknown';
+    const branch = data.branch || data.gitBranch || 'main';
+    const behind = Number(data.behind ?? data.commitsBehind ?? 0);
+    const updateAvail = Boolean(data.updateAvailable ?? behind > 0);
+
+    versionEl.textContent = `Version: v${ver}`;
+    commitEl.textContent = `Commit: ${commit}`;
+    branchEl.textContent = `Branch: ${branch}`;
+
+    if (checkRemote) {
+      if (updateAvail) {
+        statusEl.style.color = 'var(--yellow)';
+        statusEl.textContent = `⬆️ Update available (${behind > 0 ? `${behind} commit(s) behind` : 'new release'})`;
+      } else {
+        statusEl.style.color = 'var(--green)';
+        statusEl.textContent = '✅ Up to date';
+      }
+    }
+  }
+
+  function showMsg(el, type, text) {
+    el.className = `msg ${type}`;
+    el.textContent = text;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 7000);
+  }
+
+  // Delegated click handler for upgrade buttons
+  document.getElementById('plansGrid').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-upgrade]');
+    if (!btn) return;
+    const planId = btn.getAttribute('data-upgrade') || '';
+    const planName = btn.getAttribute('data-plan-name') || planId;
+    const origLabel = btn.textContent;
+    const email = document.getElementById('checkoutEmailInput')?.value.trim() || '';
+    const upgradeMsg = document.getElementById('upgradeMsg');
+
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+
+    const { url, error } = await resolveUpgradeUrl(planId, email);
+    btn.disabled = false;
+    btn.textContent = origLabel;
+
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      showMsg(upgradeMsg, 'ok', '✅ Checkout opened in a new tab. Complete payment, then activate your emailed key below.');
+    } else {
+      showMsg(upgradeMsg, 'err', `⚠️ ${error}`);
+    }
+  });
+
+  // License key activation
+  document.getElementById('activateBtn').addEventListener('click', async () => {
+    const keyInput = document.getElementById('licenseKeyInput');
+    const msg = document.getElementById('activateMsg');
+    const btn = document.getElementById('activateBtn');
+    const key = keyInput.value.trim();
+    if (!key) { showMsg(msg, 'err', 'Please enter your license key.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Activating…';
+
+    const { res, data } = await fetchJson(`${API}/api/billing/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ licenseKey: key }),
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'Activate';
+
+    if (res && res.ok && data?.ok) {
+      const planName = data?.entitlement?.plan?.name ?? data?.entitlement?.plan?.id ?? 'Pro';
+      showMsg(msg, 'ok', `✅ License activated! Plan: ${planName}. Reloading…`);
+      keyInput.value = '';
+      setTimeout(() => loadCurrentPlan(), 1500);
+    } else {
+      showMsg(msg, 'err', `❌ ${data?.error ?? 'Activation failed. Check the key and try again.'}`);
+    }
+  });
+
+  // FAQ accordion
+  document.querySelectorAll('[data-faq]').forEach(item => {
+    item.querySelector('.faq-q').addEventListener('click', () => {
+      item.classList.toggle('open');
+    });
+  });
+
+  // Updater check & copy command handlers (delegated, zero inline handlers)
+  document.getElementById('btnCheckVersion').addEventListener('click', () => loadSystemVersion(true));
+  document.getElementById('updaterSection').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-copy-cmd]');
+    if (!btn) return;
+    const cmd = btn.getAttribute('data-copy-cmd') || '';
+    const ok = await copyToClipboard(cmd);
+    const msgEl = document.getElementById('updaterMsg');
+    showMsg(msgEl, ok ? 'ok' : 'err', ok ? `📋 Copied command: ${cmd}` : 'Could not copy to clipboard');
+  });
+
+  // Init
+  loadCurrentPlan();
+  loadSystemVersion(false);
+})();
+</script>
+</body>
+</html>

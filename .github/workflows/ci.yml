@@ -23,16 +23,48 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - run: pnpm install --frozen-lockfile --allow-build esbuild --allow-build nx
 
       - name: Build & Typecheck Monorepo
         run: pnpm nx run-many -t build typecheck
 
-      - name: Deploy apps/web to Vercel (production)
-        if: github.ref == 'refs/heads/main' && env.VERCEL_TOKEN != '' && hashFiles('apps/web/**') != ''
-        run: pnpm dlx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        working-directory: apps/web
+      - name: Run Automated Test Suite
+        run: pnpm test
+
+      - name: Security & HTML Hygiene Check
+        run: |
+          node <<'EOF'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const envExample = fs.readFileSync('.env.example', 'utf8').replace(/\r\n/g, '\n');
+          if (!/^LLM_API_KEY=""$/m.test(envExample)) {
+            throw new Error('.env.example must keep LLM_API_KEY=""');
+          }
+          for (const match of envExample.matchAll(/^(LLM_API_KEY|GEMINI_API_KEY|OPENAI_API_KEY|GROQ_API_KEY|KELVIQ_API_KEY|KELVIQ_WEBHOOK_SECRET)=(.*)$/gm)) {
+            const val = match[2].split('#')[0].trim();
+            if (val !== '""' && val !== '') {
+              throw new Error(`Secret key ${match[1]} must be empty in .env.example`);
+            }
+          }
+
+          const pubDir = path.join('apps', 'clipper-service', 'src', 'public');
+          for (const file of fs.readdirSync(pubDir).filter((f) => f.endsWith('.html'))) {
+            const html = fs.readFileSync(path.join(pubDir, file), 'utf8');
+            const inlineHandlers = html.match(/\son[a-z]+\s*=/gi);
+            if (inlineHandlers) {
+              throw new Error(`${file} contains inline event handlers: ${inlineHandlers.join(', ')}`);
+            }
+          }
+          console.log('Security & HTML hygiene check passed.');
+          EOF
+
+      - name: Verify Python Scripts Syntax
+        run: python -m py_compile clipper_tui.py apps/clipper-service/src/live/detect_face.py
+
+      - name: Verify Shell Script Syntax
+        run: bash -n update.sh

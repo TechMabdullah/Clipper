@@ -9,12 +9,20 @@ export interface ChatMessage {
   timestampMs: number;
 }
 
+export interface LiveChatFeedMessage extends ChatMessage {
+  id: string;
+  isHype: boolean;
+  isTrigger?: boolean;
+}
+
 export interface ChatExplosionEvent {
   timestampMs: number;
   velocity: number;      // Current messages per second
   baseline: number;      // Rolling 60s average velocity
   multiplier: number;    // velocity / baseline
   sampleMessages: string[];
+  triggerReason?: 'velocity' | 'trigger_keyword';
+  triggerCount?: number;
 }
 
 export interface ChatTrackerOptions {
@@ -26,7 +34,11 @@ export interface ChatTrackerOptions {
   minSpikeThreshold?: number;
   /** Cooldown in ms after an explosion before another can trigger (default: 35000 = 35s) */
   cooldownMs?: number;
+  /** Custom chat keywords/commands that trigger a clip when typed >= 2 times in 6s */
+  triggerKeywords?: string[];
 }
+
+const DEFAULT_TRIGGER_KEYWORDS = ['!clip', 'clip it', 'clipped'];
 
 const HYPE_KEYWORDS = [
   'lmao', 'kekw', 'omegalul', 'pog', 'poggers', 'holy', 'wtf', 'w', 'l',
@@ -39,9 +51,12 @@ export class ChatTracker extends EventEmitter {
   private spikeMultiplier: number;
   private minSpikeThreshold: number;
   private cooldownMs: number;
+  private triggerKeywords: string[];
 
   private messageTimestamps: number[] = [];
-  private recentMessages: { text: string; time: number }[] = [];
+  private triggerTimestamps: number[] = [];
+  private recentMessages: { text: string; time: number; isTrigger: boolean }[] = [];
+  private chatFeed: LiveChatFeedMessage[] = [];
   private lastExplosionTime = 0;
   private isRunning = false;
   private ws: WebSocket | null = null;
@@ -50,6 +65,7 @@ export class ChatTracker extends EventEmitter {
 
   public currentVelocity = 0;
   public baselineVelocity = 0;
+  public triggerCount = 0;
 
   constructor(options: ChatTrackerOptions) {
     super();
@@ -58,6 +74,10 @@ export class ChatTracker extends EventEmitter {
     this.spikeMultiplier = options.spikeMultiplier ?? 2.5;
     this.minSpikeThreshold = options.minSpikeThreshold ?? 4.0;
     this.cooldownMs = options.cooldownMs ?? 35_000;
+    const rawTriggers = options.triggerKeywords ?? DEFAULT_TRIGGER_KEYWORDS;
+    this.triggerKeywords = rawTriggers
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
   }
 
   public async start(): Promise<void> {
@@ -78,7 +98,10 @@ export class ChatTracker extends EventEmitter {
 
   public stop(): void {
     this.isRunning = false;
-    if (this.intervalTimer) clearInterval(this.intervalTimer);
+    if (this.intervalTimer) {
+      clearInterval(this.intervalTimer);
+      this.intervalTimer = null;
+    }
     if (this.ws) {
       try { this.ws.close(); } catch {}
       this.ws = null;
@@ -89,25 +112,63 @@ export class ChatTracker extends EventEmitter {
     }
   }
 
-  private handleMessage(msg: ChatMessage): void {
-    const now = msg.timestampMs;
-    this.messageTimestamps.push(now);
-    this.recentMessages.push({ text: msg.text, time: now });
+  public getRecentChat(limit = 40): LiveChatFeedMessage[] {
+    return this.chatFeed.slice(-limit);
+  }
 
-    // Prune messages older than 60s
-    const cutoff = now - 60_000;
+  public getTriggerKeywords(): string[] {
+    return [...this.triggerKeywords];
+  }
+
+  private pruneOldWindows(cutoff: number): void {
     while (this.messageTimestamps.length > 0 && this.messageTimestamps[0]! < cutoff) {
       this.messageTimestamps.shift();
     }
     while (this.recentMessages.length > 0 && this.recentMessages[0]!.time < cutoff) {
       this.recentMessages.shift();
     }
+    while (this.triggerTimestamps.length > 0 && this.triggerTimestamps[0]! < cutoff) {
+      this.triggerTimestamps.shift();
+    }
+  }
+
+  private handleMessage(msg: ChatMessage): void {
+    const now = msg.timestampMs;
+    const lower = msg.text.toLowerCase();
+    const isTrigger = this.triggerKeywords.length > 0 && this.triggerKeywords.some(k => lower.includes(k));
+    const isHype = HYPE_KEYWORDS.some(k => lower.includes(k)) || isTrigger;
+
+    this.messageTimestamps.push(now);
+    this.recentMessages.push({ text: msg.text, time: now, isTrigger });
+    if (isTrigger) {
+      this.triggerTimestamps.push(now);
+      this.triggerCount += 1;
+    }
+
+    const feedEntry: LiveChatFeedMessage = {
+      id: crypto.randomUUID(),
+      author: msg.author,
+      text: msg.text,
+      timestampMs: now,
+      isHype,
+      isTrigger,
+    };
+    this.chatFeed.push(feedEntry);
+    if (this.chatFeed.length > 60) {
+      this.chatFeed.shift();
+    }
+
+    // Prune messages & trigger timestamps older than 60s
+    this.pruneOldWindows(now - 60_000);
 
     this.emit('message', msg);
+    this.emit('chat', feedEntry);
   }
 
   private evaluateVelocity(): void {
     const now = Date.now();
+    this.pruneOldWindows(now - 60_000);
+
     // Messages in last 3 seconds
     const window3s = now - 3_000;
     let count3s = 0;
@@ -139,14 +200,36 @@ export class ChatTracker extends EventEmitter {
 
     const ratio = effectiveVelocity / this.baselineVelocity;
 
+    // Trigger keywords in the last 6 seconds (enables low-viewer streams to trigger via !clip etc.)
+    const window6s = now - 6_000;
+    let recentTriggerCount = 0;
+    for (let i = this.triggerTimestamps.length - 1; i >= 0; i--) {
+      const ts = this.triggerTimestamps[i]!;
+      if (ts >= window6s && ts > this.lastExplosionTime) {
+        recentTriggerCount++;
+      } else if (ts < window6s) {
+        break;
+      }
+    }
+
     // Check explosion criteria
     const meetsMultiplier = ratio >= this.spikeMultiplier;
     const meetsMinThreshold = this.currentVelocity >= this.minSpikeThreshold;
+    const meetsVelocityExplosion = meetsMultiplier && meetsMinThreshold;
+    const meetsKeywordTrigger = recentTriggerCount >= 2;
     const offCooldown = (now - this.lastExplosionTime) > this.cooldownMs;
 
-    if (meetsMultiplier && meetsMinThreshold && offCooldown) {
+    if ((meetsVelocityExplosion || meetsKeywordTrigger) && offCooldown) {
       this.lastExplosionTime = now;
-      const sample = last3sMsgs.slice(-5).map(m => m.text);
+      const triggerMsgs6s = this.recentMessages.filter(m => m.time >= window6s && m.isTrigger);
+      const otherMsgs3s = last3sMsgs.filter(m => !m.isTrigger);
+      const sample = triggerMsgs6s.length > 0
+        ? [...triggerMsgs6s.slice(-3), ...otherMsgs3s.slice(-3)].slice(0, 5).map(m => m.text)
+        : last3sMsgs.slice(-5).map(m => m.text);
+
+      const triggerReason: ChatExplosionEvent['triggerReason'] = meetsVelocityExplosion
+        ? 'velocity'
+        : 'trigger_keyword';
 
       const explosionEvent: ChatExplosionEvent = {
         timestampMs: now,
@@ -154,12 +237,20 @@ export class ChatTracker extends EventEmitter {
         baseline: Number(this.baselineVelocity.toFixed(1)),
         multiplier: Number(ratio.toFixed(2)),
         sampleMessages: sample,
+        triggerReason,
+        triggerCount: recentTriggerCount,
       };
 
-      console.log(
-        `[chat-tracker] 💥 CHAT EXPLOSION DETECTED! Velocity: ${explosionEvent.velocity} msg/s ` +
-        `(Baseline: ${explosionEvent.baseline} msg/s, Spike: ${explosionEvent.multiplier}x)`
-      );
+      if (triggerReason === 'trigger_keyword') {
+        console.log(
+          `[chat-tracker] 🎯 TRIGGER KEYWORD CLIP! (${recentTriggerCount} matches in 6s: ${sample.slice(0, 2).join(' | ')})`
+        );
+      } else {
+        console.log(
+          `[chat-tracker] 💥 CHAT EXPLOSION DETECTED! Velocity: ${explosionEvent.velocity} msg/s ` +
+          `(Baseline: ${explosionEvent.baseline} msg/s, Spike: ${explosionEvent.multiplier}x)`
+        );
+      }
 
       this.emit('explosion', explosionEvent);
     }
@@ -171,7 +262,11 @@ export class ChatTracker extends EventEmitter {
     if (channel.includes('twitch.tv/')) {
       channel = channel.split('twitch.tv/')[1]!.split(/[/?#]/)[0]!;
     }
-    channel = channel.replace(/^#/, '');
+    channel = channel.replace(/^#/, '').replace(/[^a-z0-9_]/g, '');
+    if (!channel) {
+      console.error('[chat-tracker] Invalid Twitch channel name.');
+      return;
+    }
 
     const url = 'wss://irc-ws.chat.twitch.tv:443';
     console.log(`[chat-tracker] Connecting anonymously to Twitch chat: #${channel}...`);
@@ -268,16 +363,22 @@ export class ChatTracker extends EventEmitter {
     const channel = this.channelOrUrl
       .replace(/^https?:\/\/(?:www\.)?kick\.com\//i, '')
       .replace(/\/.*$/, '')
+      .replace(/[\r\n\s]+/g, '')
       .trim();
+    if (!channel || !/^[a-zA-Z0-9_-]{1,64}$/.test(channel)) {
+      console.error('[chat-tracker] Invalid Kick channel slug.');
+      return;
+    }
 
     console.log(`[chat-tracker] Connecting to Kick chat for: ${channel}...`);
 
     try {
       // 1. Fetch channel info to obtain chatroom ID
-      const chRes = await fetch(`https://kick.com/api/v2/channels/${channel}`, {
+      const chRes = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(channel)}`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
+        },
+        signal: AbortSignal.timeout(15_000),
       });
       if (!chRes.ok) {
         throw new Error(`Failed to fetch Kick channel info (${chRes.status}): ${channel}`);

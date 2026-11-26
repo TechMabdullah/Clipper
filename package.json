@@ -10,7 +10,8 @@
     "dev": "concurrently \"pnpm clipper\" \"pnpm notify\"",
     "build": "nx run-many -t build",
     "lint": "nx run-many -t lint",
-    "typecheck": "nx run-many -t typecheck"
+    "typecheck": "nx run-many -t typecheck",
+    "test": "node --import tsx --test apps/clipper-service/src/app.test.ts"
   },
   "devDependencies": {
     "@nx/eslint": "^20.0.0",

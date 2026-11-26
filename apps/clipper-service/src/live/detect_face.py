@@ -9,6 +9,8 @@ def detect_face(image_path):
             return {"found": False, "reason": "could not read image"}
 
         h, w = img.shape[:2]
+        if h <= 0 or w <= 0:
+            return {"found": False, "reason": "invalid image dimensions"}
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Multi-scale cascade with lower threshold for small streamer faces
@@ -50,8 +52,11 @@ def detect_face(image_path):
         # Calculate ideal 1080:720 (1.5 aspect ratio) crop around streamer facecam
         # Streamer webcam is usually ~25-32% of screen width
         cam_w = max(int(w * 0.28), int(fw * 3.5))
-        cam_w = min(cam_w, int(w * 0.40))
+        cam_w = min(cam_w, int(w * 0.40), w)
         cam_h = int(cam_w * (720 / 1080)) # Maintain exact 1080:720 aspect ratio!
+        if cam_h > h:
+            cam_h = h
+            cam_w = max(1, min(w, int(cam_h * (1080 / 720))))
 
         cx = int(x + fw / 2)
         cy = int(y + fh / 2)

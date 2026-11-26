@@ -1,8 +1,6 @@
 import type { Segment } from './transcriber.js';
 
-const LLM_PROVIDER = process.env.LLM_PROVIDER ?? 'mock';
-const LLM_API_KEY  = process.env.LLM_API_KEY ?? '';
-const LLM_MODEL    = process.env.LLM_MODEL ?? 'gemini-2.5-flash';
+const LLM_TIMEOUT_MS = 15_000;
 
 export interface Highlight {
   title: string;
@@ -21,8 +19,19 @@ export async function pickHighlights(segments: Segment[]): Promise<Highlight[]> 
     .map((s) => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s] ${s.text}`)
     .join('\n');
 
-  if (LLM_API_KEY && LLM_PROVIDER === 'gemini') return callGemini(transcript);
-  if (LLM_API_KEY && LLM_PROVIDER === 'openai') return callOpenAI(transcript);
+  const provider = (process.env.LLM_PROVIDER ?? 'mock').trim().toLowerCase();
+  const llmKey = process.env.LLM_API_KEY?.trim() ?? '';
+  const geminiKey = llmKey || (process.env.GEMINI_API_KEY?.trim() ?? '');
+  const openaiKey = llmKey || (process.env.OPENAI_API_KEY?.trim() ?? '');
+  const model = process.env.LLM_MODEL?.trim() || 'gemini-2.5-flash';
+
+  try {
+    if (geminiKey && provider === 'gemini') return await callGemini(transcript, geminiKey, model);
+    if (openaiKey && provider === 'openai') return await callOpenAI(transcript, openaiKey);
+  } catch (err) {
+    console.warn('[highlight-picker] LLM highlight picking failed, using rule-based fallback:', err);
+    return ruleBasedPicker(segments);
+  }
 
   console.log('[highlight-picker] No LLM key — using rule-based fallback');
   return ruleBasedPicker(segments);
@@ -63,8 +72,8 @@ function ruleBasedPicker(segments: Segment[]): Highlight[] {
   return highlights;
 }
 
-async function callGemini(transcript: string): Promise<Highlight[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${LLM_API_KEY}`;
+async function callGemini(transcript: string, apiKey: string, model: string): Promise<Highlight[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -72,16 +81,20 @@ async function callGemini(transcript: string): Promise<Highlight[]> {
       contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nTranscript:\n${transcript}` }] }],
       generationConfig: { temperature: 0.4, responseMimeType: 'application/json' },
     }),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
-  const json = (await res.json()) as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
+  if (!res.ok) {
+    throw new Error(`Gemini HTTP ${res.status}`);
+  }
+  const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
-  return (JSON.parse(text) as { highlights: Highlight[] }).highlights ?? [];
+  return (JSON.parse(text) as { highlights?: Highlight[] }).highlights ?? [];
 }
 
-async function callOpenAI(transcript: string): Promise<Highlight[]> {
+async function callOpenAI(transcript: string, apiKey: string): Promise<Highlight[]> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LLM_API_KEY}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
@@ -90,8 +103,12 @@ async function callOpenAI(transcript: string): Promise<Highlight[]> {
         { role: 'user', content: `Transcript:\n${transcript}` },
       ],
     }),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
-  const json = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+  if (!res.ok) {
+    throw new Error(`OpenAI HTTP ${res.status}`);
+  }
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const text = json.choices?.[0]?.message?.content ?? '{}';
-  return (JSON.parse(text) as { highlights: Highlight[] }).highlights ?? [];
+  return (JSON.parse(text) as { highlights?: Highlight[] }).highlights ?? [];
 }

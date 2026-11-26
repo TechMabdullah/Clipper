@@ -7,6 +7,9 @@ export interface StorageInfo {
   tempDir: string;
   clipsDir: string;
   archiveDir: string;
+  recordingsDir: string;
+  musicDir: string;
+  thumbsDir: string;
   isSingleDisk: boolean;
   activeDisk: string;
   availableDrives: string[];
@@ -35,7 +38,7 @@ export function getAvailableDrives(): string[] {
 }
 
 /**
- * Ensures the 4 core ClipperMedia subdirectories exist.
+ * Ensures the core ClipperMedia subdirectories exist.
  */
 export function ensureMediaDirs(rootPath: string): void {
   const dirs = [
@@ -44,6 +47,9 @@ export function ensureMediaDirs(rootPath: string): void {
     path.join(rootPath, '02_temp'),
     path.join(rootPath, '03_clips'),
     path.join(rootPath, '04_archive'),
+    path.join(rootPath, '05_streams'),
+    path.join(rootPath, '06_music'),
+    path.join(rootPath, '07_thumbs'),
   ];
 
   for (const d of dirs) {
@@ -115,9 +121,92 @@ export const INBOX = path.join(MEDIA_ROOT, '01_inbox');
 export const TEMP_DIR = path.join(MEDIA_ROOT, '02_temp');
 export const CLIPS_DIR = path.join(MEDIA_ROOT, '03_clips');
 export const ARCHIVE_DIR = path.join(MEDIA_ROOT, '04_archive');
+export const RECORDINGS_DIR = path.join(MEDIA_ROOT, '05_streams');
+export const MUSIC_DIR = path.join(MEDIA_ROOT, '06_music');
+export const THUMBS_DIR = path.join(MEDIA_ROOT, '07_thumbs');
 
 // Make sure directories exist on boot
 ensureMediaDirs(MEDIA_ROOT);
+
+const registeredStudioDirs = new Set<string>();
+
+/**
+ * Registers an explicitly user-approved local folder (e.g. via native file dialog)
+ * so Studio stream/probe helpers can safely allow reading from it.
+ */
+export function registerAllowedMediaDir(dirPath: string): void {
+  if (!dirPath || typeof dirPath !== 'string' || !dirPath.trim() || dirPath.includes('\0')) return;
+  registeredStudioDirs.add(path.resolve(dirPath.trim()));
+}
+
+/**
+ * Returns all normalized media directories allowed for Studio local file access.
+ */
+export function getAllowedMediaDirs(): string[] {
+  return [
+    MEDIA_ROOT,
+    INBOX,
+    CLIPS_DIR,
+    ARCHIVE_DIR,
+    RECORDINGS_DIR,
+    MUSIC_DIR,
+    THUMBS_DIR,
+    ...registeredStudioDirs,
+  ];
+}
+
+function normalizePathCase(p: string): string {
+  const resolved = path.resolve(p);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function resolveWithExistingRealpath(targetPath: string): string {
+  const resolved = path.resolve(targetPath);
+  let cursor = resolved;
+  const tail: string[] = [];
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return resolved;
+    tail.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  try {
+    const realBase = fs.realpathSync(cursor);
+    return tail.length > 0 ? path.join(realBase, ...tail) : realBase;
+  } catch {
+    return resolved;
+  }
+}
+
+function isSameOrInsideDir(baseDir: string, candidatePath: string): boolean {
+  const normBase = normalizePathCase(baseDir);
+  const normCandidate = normalizePathCase(candidatePath);
+  const rel = path.relative(normBase, normCandidate);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+/**
+ * Checks whether `targetPath` resolves safely inside ClipperMedia directories
+ * (or an explicitly user-registered Studio folder), guarding against path traversal
+ * and sibling prefix collisions.
+ */
+export function isPathInsideMediaDirs(targetPath: string): boolean {
+  if (!targetPath || typeof targetPath !== 'string' || !targetPath.trim() || targetPath.includes('\0')) {
+    return false;
+  }
+  const resolvedTarget = path.resolve(targetPath.trim());
+  const realTarget = resolveWithExistingRealpath(resolvedTarget);
+
+  for (const dir of getAllowedMediaDirs()) {
+    const resolvedBase = path.resolve(dir);
+    if (!isSameOrInsideDir(resolvedBase, resolvedTarget)) continue;
+    const realBase = resolveWithExistingRealpath(resolvedBase);
+    if (isSameOrInsideDir(realBase, realTarget)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function getStorageInfo(): StorageInfo {
   const drives = getAvailableDrives();
@@ -128,6 +217,9 @@ export function getStorageInfo(): StorageInfo {
     tempDir: TEMP_DIR,
     clipsDir: CLIPS_DIR,
     archiveDir: ARCHIVE_DIR,
+    recordingsDir: RECORDINGS_DIR,
+    musicDir: MUSIC_DIR,
+    thumbsDir: THUMBS_DIR,
     isSingleDisk: drives.length <= 1,
     activeDisk: rootDrive,
     availableDrives: drives,

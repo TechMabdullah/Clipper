@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clipper Studio — Admin Console</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: #121216;
+      --card: #18181e;
+      --border: #272730;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --blue: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* Login View */
+    .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: radial-gradient(circle at top, rgba(139,92,246,0.16), transparent 55%); }
+    .login-card { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    .login-card p { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+
+    /* Admin App Shell */
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 16px 28px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; gap: 12px; flex-wrap: wrap; }
+    .topbar-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 3px 9px; border-radius: 9999px; font-weight: 700; background: rgba(139,92,246,0.18); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.4); }
+    .badge-ok { background: rgba(34,197,94,0.18); color: #4ade80; border-color: rgba(34,197,94,0.4); }
+    .badge-warn { background: rgba(234,179,8,0.18); color: #fde047; border-color: rgba(234,179,8,0.45); }
+    .badge-red { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,0.45); }
+    .badge-muted { background: #272730; color: var(--muted); border-color: var(--border); }
+    .main { max-width: 1280px; margin: 0 auto; padding: 28px; }
+
+    /* Security Alert & Posture Strip */
+    .security-alert {
+      display: none; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+      background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.55); color: #fecaca;
+      border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; font-size: 13px;
+    }
+    .posture-strip {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 16px; margin-bottom: 20px; font-size: 12px;
+    }
+    .posture-label { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; margin-right: 4px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .kpi-label { font-size: 12px; color: var(--muted); text-transform: uppercase; font-weight: 600; }
+    .kpi-val { font-size: 26px; font-weight: 700; margin-top: 6px; }
+    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 24px; }
+    .section-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
+    .plan-box { background: #121217; border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .plan-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+    label.lbl { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 600; margin-bottom: 4px; margin-top: 10px; }
+    input[type="text"], input[type="url"], input[type="number"], input[type="password"], select {
+      width: 100%; background: #22222a; border: 1px solid #353542; color: var(--text);
+      padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+    .check-grid label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .check-grid input { accent-color: var(--accent); }
+
+    .btn { background: var(--accent); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sec { background: #272730; color: var(--text); }
+    .btn-sec:hover { background: #373744; }
+    .btn-red { background: var(--red); }
+    .btn-green { background: #16a34a; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+    .error-banner {
+      display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.45);
+      color: #fca5a5; font-size: 12.5px;
+    }
+    .secret-reveal {
+      display: none; margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+      background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.45);
+      font-size: 13px;
+    }
+    .json-preview-box {
+      background: #0d0d12; border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow-y: auto;
+    }
+
+    .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    code { background: #272730; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #22222a; border: 1px solid var(--accent); padding: 12px 18px; border-radius: 8px; display: none; z-index: 100; font-size: 13px; box-shadow: 0 8px 25px rgba(0,0,0,0.6); max-width: 420px; }
+  </style>
+</head>
+<body>
+
+  <!-- ADMIN LOGIN SCREEN -->
+  <div id="loginView" class="login-wrap" style="display: none;">
+    <div class="login-card">
+      <h1>🛡️ Admin Console</h1>
+      <p>Protected management portal for Kelviq Billing, Plan Pricing, License Keys, API Keys, and System Analytics.</p>
+      <label class="lbl">Administrator Password</label>
+      <input type="password" id="adminPasswordInput" placeholder="Enter admin password">
+      <div style="font-size: 11px; color: var(--muted); margin-top: 8px;">
+        Enter the <code>ADMIN_PASSWORD</code> configured in <code>.env.local</code> or during initial setup.
+      </div>
+      <div id="loginError" style="color: var(--red); font-size: 12px; margin-top: 10px; display: none;"></div>
+      <button type="button" id="btnAdminLogin" class="btn" style="width: 100%; justify-content: center; margin-top: 18px; padding: 11px;">Unlock Admin Dashboard</button>
+      <div style="text-align: center; margin-top: 16px;">
+        <a href="/" style="font-size: 12px; color: var(--muted); text-decoration: none;">← Back to Creator Studio</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN CONSOLE DASHBOARD -->
+  <div id="adminView" style="display: none;">
+    <div class="topbar">
+      <div class="topbar-left">
+        <strong style="font-size: 18px;">🛡️ Clipper Studio Admin</strong>
+        <span class="badge">KELVIQ MERCHANT CONSOLE</span>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <a href="/" class="btn btn-sec btn-sm">🎬 Creator Dashboard</a>
+        <button type="button" id="btnAdminRefresh" class="btn btn-sec btn-sm">🔄 Refresh</button>
+        <button type="button" id="btnAdminLogout" class="btn btn-red btn-sm">Sign Out</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- Default Password Security Alert Banner -->
+      <div id="securityAlertBanner" class="security-alert">
+        <div>
+          <strong>🚨 Security Alert:</strong> Default administrator password is still active. Change your Admin Password immediately before exposing this console.
+        </div>
+        <button type="button" class="btn btn-red btn-sm" id="btnJumpToPassword">Change Password Now ↓</button>
+      </div>
+
+      <!-- Security Posture Summary Pill Strip -->
+      <div class="posture-strip" id="securityPostureStrip">
+        <span class="posture-label">Security Posture:</span>
+        <span class="badge badge-ok" id="postureRateLimit">🛡️ Rate Limit: 60 req/min</span>
+        <span class="badge badge-ok" id="postureCsp">🔒 CSP: Strict ('self')</span>
+        <span class="badge badge-muted" id="postureAdminAuth">🔑 Admin Auth: Checking…</span>
+        <span class="badge badge-muted" id="postureWebhookHmac">🔏 Webhook HMAC: Checking…</span>
+      </div>
+
+      <!-- Top Metrics -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Active Workstation Plan</div>
+          <div class="kpi-val" id="admActivePlan" style="color: var(--accent);">FREE</div>
+          <div class="kpi-sub" id="admLicenseMeta">No license activated</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Total Clips Rendered</div>
+          <div class="kpi-val" id="admTotalClips">0</div>
+          <div class="kpi-sub" id="admDailyUsage">0 rendered today</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Kelviq Events Logged</div>
+          <div class="kpi-val" id="admEventsCount">0</div>
+          <div class="kpi-sub" id="admKelviqStatus">Kelviq Status: —</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Media Storage Mode</div>
+          <div class="kpi-val" id="admStorageMode" style="font-size: 19px; color: var(--blue);">—</div>
+          <div class="kpi-sub" id="admStorageRoot">—</div>
+        </div>
+      </div>
+
+      <!-- System Version & Repo Updater Info Box -->
+      <div class="section-card" id="adminVersionCard">
+        <div class="section-title">
+          <span>🔄 System Version &amp; Repository Updater</span>
+          <button type="button" id="btnAdminCheckUpdate" class="btn btn-sec btn-sm">🔍 Check Upstream Updates</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; font-size:13px;">
+            <span class="badge" id="admSysVersion">Version: —</span>
+            <span class="badge badge-muted" id="admSysCommit">Commit: —</span>
+            <span class="badge badge-muted" id="admSysBranch">Branch: —</span>
+            <span id="admSysUpdateStatus" style="font-size:12.5px; color:var(--muted);"></span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <code>.\update.ps1</code>
+            <button type="button" class="btn btn-sec btn-sm" data-action="copy-cmd" data-cmd=".\update.ps1">Copy Win</button>
+            <code>./update.sh</code>
+            <button type="button" class="btn btn-sec btn-sm" data-action="copy-cmd" data-cmd="./update.sh">Copy Unix</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Security Self-Audit Card -->
+      <div class="section-card" id="securityScanCard">
+        <div class="section-title">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span>🛡️ Security Self-Audit</span>
+            <span class="badge badge-muted" id="securityScanScoreBadge">— / 100</span>
+          </div>
+          <button type="button" id="btnRefreshSecurityScan" class="btn btn-sec btn-sm">🛡️ Run Security Scan</button>
+        </div>
+        <div id="securityScanSummary" style="font-size:13px; color:var(--muted); margin-bottom:12px;">Running security posture checks…</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Check</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="securityScanChecksBody">
+              <tr><td colspan="3" style="color:var(--muted);">Loading security scan…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- System Diagnostics & Dependencies Card -->
+      <div class="section-card" id="systemDiagnosticsCard">
+        <div class="section-title">
+          <span>🩺 System Diagnostics &amp; Dependencies</span>
+          <button type="button" id="btnRefreshDiagnostics" class="btn btn-sec btn-sm">🔄 Refresh Diagnostics</button>
+        </div>
+        <div id="diagnosticsBinariesGrid" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+          <span class="badge badge-muted">Loading binary checks…</span>
+        </div>
+        <div id="diagnosticsCountsRow" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;"></div>
+        <div id="diagnosticsMetaRow" style="font-size:12px; color:var(--muted);"></div>
+      </div>
+
+      <!-- Stream Health Monitor Card -->
+      <div class="section-card" id="streamHealthCard">
+        <div class="section-title">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span>📈 Stream Health Monitor</span>
+            <span class="badge badge-muted" id="streamHealthScoreBadge">Score: —/100</span>
+            <span class="badge badge-muted" id="streamHealthTrendBadge">Trend: —</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select id="healthSessionSelect" style="width:260px; padding:6px 10px; font-size:12.5px;">
+              <option value="">No sessions recorded</option>
+            </select>
+            <button type="button" id="btnRefreshStreamHealth" class="btn btn-sec btn-sm">🔄 Refresh</button>
+            <button type="button" id="btnPruneSnapshots" class="btn btn-red btn-sm">🧹 Prune (&gt;30d)</button>
+          </div>
+        </div>
+        <div id="streamHealthMetaRow" style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin-bottom:12px;">
+          <span>Select a stream session to inspect velocity &amp; audio peak health.</span>
+        </div>
+        <div style="overflow-x:auto; max-height:280px; overflow-y:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Velocity (msg/s)</th>
+                <th>Peak dB</th>
+                <th>Clip Count</th>
+              </tr>
+            </thead>
+            <tbody id="streamHealthSnapshotsBody">
+              <tr><td colspan="4" style="color:var(--muted);">No stream snapshot session selected.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Upload Queue Platform Stats Card -->
+      <div class="section-card" id="adminUploadStatsCard">
+        <div class="section-title">
+          <span>📤 Upload Queue Platform Stats</span>
+          <button type="button" id="btnRefreshAdminUploadStats" class="btn btn-sec btn-sm">🔄 Refresh Stats</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Queued</th>
+                <th>In Progress</th>
+                <th>Done</th>
+                <th>Failed</th>
+              </tr>
+            </thead>
+            <tbody id="adminUploadStatsBody">
+              <tr><td colspan="5" style="color:var(--muted);">Loading upload queue stats…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Editable Paid Plans (FREE / PRO / ULTRA) -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>💎 Paid Tiers, Quotas &amp; Kelviq Payment Links</span>
+          <span style="font-size: 12px; font-weight: normal; color: var(--muted);">Edit prices, daily quotas (-1 = unlimited), feature access, and Kelviq links directly</span>
+        </div>
+        <div id="plansEditorGrid" class="plans-grid"></div>
+      </div>
+
+      <!-- Kelviq API Settings + VIP Key Generator -->
+      <div class="two-col">
+        <div class="section-card">
+          <div class="section-title">
+            <span>⚡ Kelviq Integration &amp; Security</span>
+            <button type="button" id="btnTestKelviq" class="btn btn-sec btn-sm">🔌 Test Kelviq API</button>
+          </div>
+          <label class="lbl">Kelviq API Key (Server / Client Access Token)</label>
+          <input type="password" id="setKelviqToken" placeholder="Enter Kelviq API key (leave masked to keep existing)">
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label class="lbl">Kelviq Environment</label>
+              <select id="setKelviqEnv">
+                <option value="production">Production (api.kelviq.com)</option>
+                <option value="sandbox">Sandbox (sandboxapi.kelviq.com)</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Default Watermark Text</label>
+              <input type="text" id="setWatermarkText" placeholder="Clipper Studio">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; margin-bottom:4px; gap:8px; flex-wrap:wrap;">
+            <label class="lbl" style="margin:0;">Kelviq Webhook Secret (<code>kq_whsec_...</code>)</label>
+            <span id="webhookSecretStatusBadge" class="badge badge-muted" style="font-size:10px;">Not Configured</span>
+          </div>
+          <input type="password" id="setKelviqWebhookSecret" placeholder="Enter kq_whsec_... (leave blank to keep existing)">
+          <label id="clearWebhookSecretWrap" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:6px; cursor:pointer;">
+            <input type="checkbox" id="clearWebhookSecretCheckbox" style="accent-color: var(--red);">
+            <span>Clear existing saved webhook secret</span>
+          </label>
+
+          <label class="lbl">Kelviq Customer Portal URL (Optional)</label>
+          <input type="text" id="setKelviqPortalUrl" placeholder="https://portal.kelviq.com/...">
+
+          <label class="lbl" for="setNewAdminPass">Change Admin Password (Optional)</label>
+          <input type="password" id="setNewAdminPass" placeholder="Min 8 characters to update">
+
+          <div style="margin-top: 12px; padding: 10px; background: #121217; border-radius: 8px; font-size: 12px; color: var(--muted);">
+            Webhook URL to register in Kelviq Dashboard:<br>
+            <code id="webhookEndpointDisplay">http://localhost:4001/api/webhooks/kelviq</code>
+          </div>
+
+          <div id="adminSettingsError" class="error-banner"></div>
+
+          <button type="button" id="btnSaveAdminSettings" class="btn" style="margin-top: 16px; width: 100%; justify-content: center;">💾 Save Kelviq &amp; Security Settings</button>
+        </div>
+
+        <div class="section-card">
+          <div class="section-title">🔑 Generate Override / VIP License Key</div>
+          <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+            Automated payments route directly through Kelviq checkout &amp; email. Use this generator anytime you want to issue an instant manual VIP/support key.
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label class="lbl">Tier</label>
+              <select id="genKeyPlan">
+                <option value="pro" selected>Pro Creator</option>
+                <option value="ultra">Ultra Studio</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Validity (Days, 0 = Lifetime)</label>
+              <input type="number" id="genKeyDays" value="30" min="0">
+            </div>
+          </div>
+          <label class="lbl">Customer Email (Optional)</label>
+          <input type="text" id="genKeyEmail" placeholder="creator@example.com">
+          <label class="lbl">Internal Note</label>
+          <input type="text" id="genKeyNote" placeholder="e.g. Manual bank / Kelviq VIP">
+
+          <button type="button" id="btnGenerateVipKey" class="btn btn-green" style="margin-top: 14px; width: 100%; justify-content: center;">✨ Generate Key</button>
+
+          <div id="generatedKeyResult" style="display: none; margin-top: 12px; padding: 10px 12px; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.4); border-radius: 8px; font-size: 13px;"></div>
+
+          <div style="margin-top: 16px; max-height: 220px; overflow-y: auto;">
+            <table>
+              <thead><tr><th>Key</th><th>Tier</th><th>Customer</th><th>Action</th></tr></thead>
+              <tbody id="vipKeysTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Keys Manager Card -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>🔐 API Keys Manager (<code>csk_*</code> Bearer Tokens)</span>
+          <button type="button" id="btnRefreshApiKeys" class="btn btn-sec btn-sm">🔄 Refresh Keys</button>
+        </div>
+        <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 14px;">
+          Issue scoped bearer tokens for external scripts, OBS plugins, or CI automation calling <code>/api/clipper/*</code> and <code>/api/studio/*</code>. Raw keys are displayed once on creation.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom: 12px;">
+          <input type="text" id="apiKeyLabelInput" placeholder="Key label (e.g. StreamDeck Macro, CI Pipeline)" style="flex:1; min-width:220px;">
+          <button type="button" id="btnGenerateApiKey" class="btn">🔐 Generate API Key</button>
+        </div>
+        <div id="apiKeySecretReveal" class="secret-reveal"></div>
+
+        <div style="overflow-x:auto; margin-top: 14px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Masked Key</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="apiKeysTableBody">
+              <tr><td colspan="6" style="color:var(--muted);">No API keys generated yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Outbound Signed Webhooks (https://) Card -->
+      <div class="section-card" id="outboundWebhooksCard">
+        <div class="section-title">
+          <span>🪝 Outbound Signed Webhooks (<code>https://</code>)</span>
+          <button type="button" id="btnRefreshWebhooks" class="btn btn-sec btn-sm">🔄 Refresh Webhooks</button>
+        </div>
+        <p style="font-size: 12.5px; color: var(--muted); margin-bottom: 14px;">
+          Deliver HMAC-SHA256 signed JSON webhook payloads over HTTPS when clips finish rendering, live chat spikes trigger, or batch jobs complete.
+        </p>
+        <div style="display:grid; grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.5fr) auto; gap:10px; align-items:end; margin-bottom:10px;">
+          <div>
+            <label class="lbl" for="webhookNameInput" style="margin-top:0;">Webhook Name</label>
+            <input type="text" id="webhookNameInput" placeholder="e.g. Production Relay / Discord Bridge">
+          </div>
+          <div>
+            <label class="lbl" for="webhookUrlInput" style="margin-top:0;">HTTPS Endpoint URL</label>
+            <input type="url" id="webhookUrlInput" placeholder="https://hooks.example.com/clipper">
+          </div>
+          <div>
+            <button type="button" id="btnCreateWebhook" class="btn">🪝 Add Webhook</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; font-size:12.5px; color:var(--muted); margin-bottom:10px;">
+          <span style="font-weight:600; color:var(--text);">Subscribed Events:</span>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" class="outbound-webhook-event" value="clip.ready" checked style="accent-color:var(--accent);">
+            <code>clip.ready</code>
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" class="outbound-webhook-event" value="live.explosion" checked style="accent-color:var(--accent);">
+            <code>live.explosion</code>
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" class="outbound-webhook-event" value="job.completed" checked style="accent-color:var(--accent);">
+            <code>job.completed</code>
+          </label>
+        </div>
+        <div id="webhookCreateError" class="error-banner"></div>
+        <div id="webhookSecretReveal" class="secret-reveal"></div>
+
+        <div style="overflow-x:auto; margin-top: 14px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Masked Secret</th>
+                <th>URL</th>
+                <th>Events</th>
+                <th>Status</th>
+                <th>Last Delivery</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="outboundWebhooksTableBody">
+              <tr><td colspan="7" style="color:var(--muted);">No outbound webhooks configured yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Kelviq Checkout & Activation Webhook Logs -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>🧾 Kelviq Purchases, Activations &amp; Webhook Events</span>
+          <button type="button" id="btnRefreshEventLog" class="btn btn-sec btn-sm">🔄 Refresh Events</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event Type</th>
+                <th>Customer Email</th>
+                <th>Plan</th>
+                <th>License Key</th>
+                <th>Amount</th>
+                <th>Payload</th>
+              </tr>
+            </thead>
+            <tbody id="kelviqEventsBody">
+              <tr><td colspan="7" style="color: var(--muted);">No Kelviq webhook or activation events yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Security & Admin Audit Log -->
+      <div class="section-card">
+        <div class="section-title">
+          <span>🛡️ Security &amp; Admin Audit Log</span>
+          <button type="button" id="btnRefreshAuditLog" class="btn btn-sec btn-sm">🔄 Refresh Audit Log</button>
+        </div>
+        <div style="overflow-x: auto; max-height: 360px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Actor / IP</th>
+                <th>Target / Details</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogTableBody">
+              <tr><td colspan="5" style="color: var(--muted);">Loading audit log…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    let cachedPlans = [];
+    let cachedLocalLicenses = [];
+    let cachedApiKeys = [];
+    let cachedWebhooks = [];
+    let cachedEvents = [];
+    let lastGeneratedLicenseKey = '';
+    let lastGeneratedApiKey = '';
+    let lastGeneratedWebhookSecret = '';
+    let toastTimer = null;
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+    }
+
+    async function fetchJson(url, options = {}) {
+      const headers = Object.assign({ 'X-Clipper-CSRF': '1' }, options.headers || {});
+      const res = await fetch(url, { ...options, headers });
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text };
+        }
+      }
+      return { res, data };
+    }
+
+    async function copyToClipboard(text) {
+      const val = String(text ?? '');
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(val);
+          return true;
+        } catch {}
+      }
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = val;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+
+    function maskSensitiveJson(val) {
+      if (val === null || val === undefined) return val;
+      if (Array.isArray(val)) return val.map(maskSensitiveJson);
+      if (typeof val !== 'object') return val;
+
+      const sensitiveKeyRe = /(license_?key|secret|token|password|api_?key|authorization)/i;
+      const out = {};
+      for (const [k, v] of Object.entries(val)) {
+        if (sensitiveKeyRe.test(k) && typeof v === 'string' && v.length > 0) {
+          out[k] = v.length > 8 ? `***${v.slice(-6)}` : '***';
+        } else {
+          out[k] = maskSensitiveJson(v);
+        }
+      }
+      return out;
+    }
+
+    async function checkAdminSession() {
+      try {
+        const { res, data } = await fetchJson('/api/admin/me');
+        if (res.ok && data?.authenticated) {
+          document.getElementById('loginView').style.display = 'none';
+          document.getElementById('adminView').style.display = 'block';
+          loadAdminOverview();
+        } else {
+          document.getElementById('loginView').style.display = 'flex';
+          document.getElementById('adminView').style.display = 'none';
+        }
+      } catch {
+        document.getElementById('loginView').style.display = 'flex';
+        document.getElementById('adminView').style.display = 'none';
+      }
+    }
+
+    async function adminLogin() {
+      const password = document.getElementById('adminPasswordInput').value;
+      const errEl = document.getElementById('loginError');
+      const btn = document.getElementById('btnAdminLogin');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.innerText = 'Signing in...';
+
+      try {
+        const { res, data } = await fetchJson('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        if (!res.ok) {
+          errEl.innerText = data?.error || 'Authentication failed';
+          errEl.style.display = 'block';
+          return;
+        }
+        document.getElementById('adminPasswordInput').value = '';
+        await checkAdminSession();
+      } catch (err) {
+        errEl.innerText = err instanceof Error ? err.message : 'Unable to reach admin server';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Unlock Admin Dashboard';
+      }
+    }
+
+    async function adminLogout() {
+      const btn = document.getElementById('btnAdminLogout');
+      btn.disabled = true;
+      try {
+        await fetchJson('/api/admin/logout', { method: 'POST' });
+        await checkAdminSession();
+      } catch {
+        showToast('❌ Failed to sign out cleanly');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function updateWebhookSecretBadge(configured) {
+      const badge = document.getElementById('webhookSecretStatusBadge');
+      const clearWrap = document.getElementById('clearWebhookSecretWrap');
+      const clearCb = document.getElementById('clearWebhookSecretCheckbox');
+      if (configured) {
+        badge.innerText = '✓ Configured';
+        badge.className = 'badge badge-ok';
+        clearWrap.style.display = 'inline-flex';
+      } else {
+        badge.innerText = 'Not Configured';
+        badge.className = 'badge badge-muted';
+        clearWrap.style.display = 'none';
+      }
+      clearCb.checked = false;
+    }
+
+    function updateSecurityPosture(settings) {
+      const usingDefault = Boolean(settings?.usingDefaultPassword);
+      const alertBanner = document.getElementById('securityAlertBanner');
+      alertBanner.style.display = usingDefault ? 'flex' : 'none';
+
+      const adminBadge = document.getElementById('postureAdminAuth');
+      if (usingDefault) {
+        adminBadge.innerText = '⚠️ Admin Auth: Default Password';
+        adminBadge.className = 'badge badge-red';
+      } else {
+        adminBadge.innerText = '✅ Admin Auth: Custom Password';
+        adminBadge.className = 'badge badge-ok';
+      }
+
+      const hmacBadge = document.getElementById('postureWebhookHmac');
+      if (settings?.kelviqWebhookSecretConfigured) {
+        hmacBadge.innerText = '✅ Webhook HMAC: Active';
+        hmacBadge.className = 'badge badge-ok';
+      } else {
+        hmacBadge.innerText = '⚠️ Webhook HMAC: Unset';
+        hmacBadge.className = 'badge badge-warn';
+      }
+    }
+
+    async function loadAdminOverview() {
+      const refreshBtn = document.getElementById('btnAdminRefresh');
+      if (refreshBtn) refreshBtn.disabled = true;
+      try {
+        const { res, data: d } = await fetchJson('/api/admin/overview');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !d?.ok) {
+          showToast('❌ ' + (d?.error || 'Failed to load admin overview'));
+          return;
+        }
+
+        document.getElementById('admActivePlan').innerText = String(d.entitlement?.plan?.name || 'FREE').toUpperCase();
+        document.getElementById('admLicenseMeta').innerText = d.entitlement?.license?.maskedKey
+          ? `Key: ${d.entitlement.license.maskedKey} (${d.entitlement.license.provider})`
+          : 'Running Free Starter Tier';
+        document.getElementById('admTotalClips').innerText = d.analytics?.totalClips ?? 0;
+        document.getElementById('admDailyUsage').innerText = `${d.analytics?.dailyClipCount ?? 0} clips today • Avg Virality ${d.analytics?.avgVirality ?? 0}/100`;
+        document.getElementById('admEventsCount').innerText = Array.isArray(d.events) ? d.events.length : 0;
+        document.getElementById('admKelviqStatus').innerText = d.settings?.kelviqTokenConfigured
+          ? `Connected (${d.settings.kelviqEnvironment})`
+          : 'API Key not set yet';
+        document.getElementById('admStorageMode').innerText = d.storage?.isSingleDisk ? 'Single-Disk' : 'Secondary Disk';
+        document.getElementById('admStorageRoot').innerText = d.storage?.mediaRoot || '—';
+        document.getElementById('webhookEndpointDisplay').innerText = `${location.origin}/api/webhooks/kelviq`;
+
+        // Settings fields
+        document.getElementById('setKelviqToken').value = d.settings?.kelviqTokenMasked || '';
+        document.getElementById('setKelviqEnv').value = d.settings?.kelviqEnvironment || 'production';
+        document.getElementById('setKelviqWebhookSecret').value = '';
+        document.getElementById('setKelviqPortalUrl').value = d.settings?.kelviqPortalUrl || '';
+        document.getElementById('setWatermarkText').value = d.settings?.defaultWatermarkText || 'Clipper Studio';
+        updateWebhookSecretBadge(Boolean(d.settings?.kelviqWebhookSecretConfigured));
+        updateSecurityPosture(d.settings || {});
+
+        cachedPlans = Array.isArray(d.plans) ? d.plans : [];
+        cachedLocalLicenses = Array.isArray(d.localLicenses) ? d.localLicenses : [];
+        renderPlansEditor(cachedPlans);
+        renderVipKeys(cachedLocalLicenses);
+        renderEvents(Array.isArray(d.events) ? d.events : []);
+
+        // Load additional admin modules in parallel
+        await Promise.all([
+          loadSystemVersion(false),
+          loadSecurityScan(),
+          loadSystemDiagnostics(),
+          loadStreamHealthSessions(),
+          loadAdminUploadStats(),
+          loadApiKeys(),
+          loadOutboundWebhooks(),
+          loadEventLog(),
+          loadAuditLog(),
+        ]);
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to load admin overview'));
+      } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
+      }
+    }
+
+    async function loadSystemVersion(checkRemote = false) {
+      const btn = document.getElementById('btnAdminCheckUpdate');
+      const statusEl = document.getElementById('admSysUpdateStatus');
+      if (checkRemote && btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Checking...';
+      }
+      try {
+        const url = checkRemote ? '/api/system/version?checkRemote=1' : '/api/system/version';
+        const { res, data } = await fetchJson(url);
+        if (!res.ok || !data) {
+          document.getElementById('admSysVersion').innerText = 'Version: unavailable';
+          return;
+        }
+        const ver = data.version || data.packageVersion || '0.0.1';
+        const commit = data.shortCommit || data.commit || data.sha || 'unknown';
+        const branch = data.branch || data.gitBranch || 'main';
+        const behind = Number(data.behind ?? data.commitsBehind ?? 0);
+        const updateAvail = Boolean(data.updateAvailable ?? behind > 0);
+
+        document.getElementById('admSysVersion').innerText = `Version: v${ver}`;
+        document.getElementById('admSysCommit').innerText = `Commit: ${commit}`;
+        document.getElementById('admSysBranch').innerText = `Branch: ${branch}`;
+
+        if (checkRemote) {
+          if (updateAvail) {
+            statusEl.style.color = '#fde047';
+            statusEl.innerText = `⬆️ Update available (${behind > 0 ? `${behind} commit(s) behind` : 'new release'})`;
+          } else {
+            statusEl.style.color = '#4ade80';
+            statusEl.innerText = '✅ Up to date with origin';
+          }
+        }
+      } catch {
+        document.getElementById('admSysVersion').innerText = 'Version: error';
+      } finally {
+        if (checkRemote && btn) {
+          btn.disabled = false;
+          btn.innerText = '🔍 Check Upstream Updates';
+        }
+      }
+    }
+
+    function renderPlansEditor(plans) {
+      const grid = document.getElementById('plansEditorGrid');
+      grid.innerHTML = plans.map(p => {
+        const pid = escapeHtml(p.id);
+        return `
+          <div class="plan-box" data-plan-id="${pid}">
+            <div class="plan-header">
+              <strong style="font-size: 16px;">${escapeHtml(String(p.id || '').toUpperCase())} TIER</strong>
+              <button type="button" class="btn btn-sm" data-action="save-plan" data-plan-id="${pid}">💾 Save Plan</button>
+            </div>
+            <label class="lbl">Display Name</label>
+            <input type="text" id="p_${pid}_name" value="${escapeHtml(p.name)}">
+
+            <label class="lbl">Tagline</label>
+            <input type="text" id="p_${pid}_tagline" value="${escapeHtml(p.tagline)}">
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label class="lbl">Price ($ USD)</label>
+                <input type="number" step="0.01" min="0" id="p_${pid}_price" value="${escapeHtml(p.price_usd)}">
+              </div>
+              <div>
+                <label class="lbl">Billing Period</label>
+                <select id="p_${pid}_period">
+                  <option value="MONTHLY" ${p.billing_period==='MONTHLY'?'selected':''}>Monthly</option>
+                  <option value="YEARLY" ${p.billing_period==='YEARLY'?'selected':''}>Yearly</option>
+                  <option value="ONE_TIME" ${p.billing_period==='ONE_TIME'?'selected':''}>Lifetime / One-Time</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label class="lbl">Daily Clip Limit (-1 = Unlimited)</label>
+                <input type="number" min="-1" step="1" id="p_${pid}_limit" value="${escapeHtml(p.daily_clip_limit)}">
+              </div>
+              <div>
+                <label class="lbl">Max Resolution</label>
+                <select id="p_${pid}_res">
+                  <option value="720" ${p.max_resolution<=720?'selected':''}>720p HD</option>
+                  <option value="1080" ${p.max_resolution>720?'selected':''}>1080p60 Full HD</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="lbl">Kelviq Payment Link URL</label>
+            <input type="text" id="p_${pid}_link" value="${escapeHtml(p.kelviq_payment_link)}" placeholder="https://checkout.kelviq.com/...">
+
+            <label class="lbl">Kelviq Plan Identifier (Optional API Match)</label>
+            <input type="text" id="p_${pid}_kplan" value="${escapeHtml(p.kelviq_plan_identifier)}" placeholder="e.g. pro_monthly">
+
+            <div class="check-grid">
+              <label><input type="checkbox" id="p_${pid}_wm" ${p.watermark_enabled?'checked':''}> Watermark On</label>
+              <label><input type="checkbox" id="p_${pid}_cap" ${p.allow_auto_captions?'checked':''}> Auto-Captions</label>
+              <label><input type="checkbox" id="p_${pid}_peak" ${p.allow_audio_peak?'checked':''}> Audio Peak AI</label>
+              <label><input type="checkbox" id="p_${pid}_vir" ${p.allow_virality_ai?'checked':''}> Virality Score</label>
+              <label><input type="checkbox" id="p_${pid}_watch" ${p.allow_watchlist?'checked':''}> Watchlist Auto</label>
+              <label><input type="checkbox" id="p_${pid}_brand" ${p.allow_custom_branding?'checked':''}> Custom Branding</label>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function savePlan(id, btnEl) {
+      const nameVal = document.getElementById(`p_${id}_name`).value.trim();
+      const rawPrice = document.getElementById(`p_${id}_price`).value.trim();
+      const rawLimit = document.getElementById(`p_${id}_limit`).value.trim();
+
+      if (!nameVal) {
+        showToast('❌ Display Name cannot be empty');
+        return;
+      }
+      if (!rawPrice) {
+        showToast('❌ Price ($ USD) cannot be empty');
+        return;
+      }
+      const priceUsd = Number(rawPrice);
+      if (!Number.isFinite(priceUsd) || priceUsd < 0) {
+        showToast('❌ Price ($ USD) must be a valid number >= 0');
+        return;
+      }
+      if (!rawLimit || !/^-?\d+$/.test(rawLimit)) {
+        showToast('❌ Daily Clip Limit must be an integer (-1 for unlimited, or >= 0)');
+        return;
+      }
+      const dailyClipLimit = parseInt(rawLimit, 10);
+      if (!Number.isInteger(dailyClipLimit) || dailyClipLimit < -1) {
+        showToast('❌ Daily Clip Limit must be -1 (unlimited) or >= 0');
+        return;
+      }
+
+      const payload = {
+        name: nameVal,
+        tagline: document.getElementById(`p_${id}_tagline`).value.trim(),
+        price_usd: priceUsd,
+        billing_period: document.getElementById(`p_${id}_period`).value,
+        daily_clip_limit: dailyClipLimit,
+        max_resolution: parseInt(document.getElementById(`p_${id}_res`).value, 10),
+        kelviq_payment_link: document.getElementById(`p_${id}_link`).value.trim(),
+        kelviq_plan_identifier: document.getElementById(`p_${id}_kplan`).value.trim(),
+        watermark_enabled: document.getElementById(`p_${id}_wm`).checked,
+        allow_auto_captions: document.getElementById(`p_${id}_cap`).checked,
+        allow_audio_peak: document.getElementById(`p_${id}_peak`).checked,
+        allow_virality_ai: document.getElementById(`p_${id}_vir`).checked,
+        allow_watchlist: document.getElementById(`p_${id}_watch`).checked,
+        allow_custom_branding: document.getElementById(`p_${id}_brand`).checked,
+      };
+
+      if (btnEl) { btnEl.disabled = true; btnEl.innerText = 'Saving...'; }
+      try {
+        const { res, data } = await fetchJson(`/api/admin/plans/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          const msg = data?.error || 'Failed to save plan';
+          showToast('❌ ' + msg);
+          alert(msg);
+          return;
+        }
+        showToast(`✅ Saved ${id.toUpperCase()} tier configuration`);
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to save plan'));
+      } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.innerText = '💾 Save Plan'; }
+      }
+    }
+
+    async function saveAdminSettings() {
+      const btn = document.getElementById('btnSaveAdminSettings');
+      const errBanner = document.getElementById('adminSettingsError');
+      errBanner.style.display = 'none';
+      errBanner.innerText = '';
+
+      const clearWebhookSecret = document.getElementById('clearWebhookSecretCheckbox').checked;
+      const webhookSecretVal = document.getElementById('setKelviqWebhookSecret').value.trim();
+
+      const payload = {
+        kelviqAccessToken: document.getElementById('setKelviqToken').value,
+        kelviqEnvironment: document.getElementById('setKelviqEnv').value,
+        kelviqWebhookSecret: clearWebhookSecret ? '' : webhookSecretVal,
+        clearWebhookSecret,
+        kelviqPortalUrl: document.getElementById('setKelviqPortalUrl').value.trim(),
+        defaultWatermarkText: document.getElementById('setWatermarkText').value.trim(),
+        newAdminPassword: document.getElementById('setNewAdminPass').value,
+      };
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Saving...';
+      try {
+        const { res, data } = await fetchJson('/api/admin/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          const msg = data?.error || 'Failed to save settings';
+          errBanner.innerText = '❌ ' + msg;
+          errBanner.style.display = 'block';
+          showToast('❌ ' + msg);
+          return;
+        }
+        document.getElementById('setNewAdminPass').value = '';
+        document.getElementById('setKelviqWebhookSecret').value = '';
+        document.getElementById('clearWebhookSecretCheckbox').checked = false;
+        showToast('✅ Kelviq & Security settings saved');
+        await loadAdminOverview();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to save settings';
+        errBanner.innerText = '❌ ' + msg;
+        errBanner.style.display = 'block';
+        showToast('❌ ' + msg);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '💾 Save Kelviq & Security Settings';
+      }
+    }
+
+    async function testKelviqConnection() {
+      const btn = document.getElementById('btnTestKelviq');
+      btn.disabled = true;
+      btn.innerText = '⏳ Testing...';
+      showToast('Testing Kelviq API connectivity...');
+      try {
+        const { res, data } = await fetchJson('/api/admin/kelviq/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data?.connected) {
+          const msg = data?.error || data?.message || 'Could not verify Kelviq connection';
+          showToast('❌ ' + msg);
+          alert('Kelviq API error: ' + msg);
+          return;
+        }
+        showToast('✅ Kelviq API endpoint reachable!');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Network error testing Kelviq API';
+        showToast('❌ ' + msg);
+        alert('Kelviq API error: ' + msg);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🔌 Test Kelviq API';
+      }
+    }
+
+    async function generateVipKey() {
+      const btn = document.getElementById('btnGenerateVipKey');
+      btn.disabled = true;
+      btn.innerText = '⏳ Generating...';
+      try {
+        const { res, data } = await fetchJson('/api/admin/licenses/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planId: document.getElementById('genKeyPlan').value,
+            expiresDays: Number(document.getElementById('genKeyDays').value || 0),
+            customerEmail: document.getElementById('genKeyEmail').value.trim(),
+            note: document.getElementById('genKeyNote').value.trim(),
+          }),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data?.ok || !data?.license?.license_key) {
+          const msg = data?.error || 'Failed to generate VIP license key';
+          showToast('❌ ' + msg);
+          alert(msg);
+          return;
+        }
+        lastGeneratedLicenseKey = data.license.license_key;
+        const box = document.getElementById('generatedKeyResult');
+        box.style.display = 'block';
+        box.innerHTML = `New Key: <code>${escapeHtml(lastGeneratedLicenseKey)}</code> <button type="button" class="btn btn-sm btn-sec" style="margin-left:8px;" data-action="copy-generated-key">Copy</button>`;
+        await loadAdminOverview();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to generate key'));
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '✨ Generate Key';
+      }
+    }
+
+    function renderVipKeys(keys) {
+      const tbody = document.getElementById('vipKeysTableBody');
+      if (!keys.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);">No manual VIP keys generated yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = keys.map((k, idx) => `
+        <tr style="${k.active ? '' : 'opacity:0.45; text-decoration:line-through;'}">
+          <td><code>${escapeHtml(k.license_key)}</code></td>
+          <td>${escapeHtml(String(k.plan_id || '').toUpperCase())}</td>
+          <td>${escapeHtml(k.customer_email || k.note || '—')}</td>
+          <td>${k.active ? `<button type="button" class="btn btn-red btn-sm" data-action="revoke-key" data-key-idx="${idx}">Revoke</button>` : 'Revoked'}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function revokeKey(licenseKey, btnEl) {
+      if (!licenseKey) return;
+      if (btnEl) btnEl.disabled = true;
+      try {
+        const { res, data } = await fetchJson('/api/admin/licenses/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licenseKey }),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          showToast('❌ ' + (data?.error || 'Failed to revoke key'));
+          return;
+        }
+        showToast('License key revoked');
+        await loadAdminOverview();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to revoke key'));
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    // ── API Keys Manager ──────────────────────────────────────────────────
+    async function loadApiKeys() {
+      const tbody = document.getElementById('apiKeysTableBody');
+      try {
+        const { res, data } = await fetchJson('/api/admin/api-keys');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="6" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to load API keys')}</td></tr>`;
+          return;
+        }
+        cachedApiKeys = Array.isArray(data?.keys) ? data.keys : (Array.isArray(data) ? data : []);
+        if (!cachedApiKeys.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No API keys generated yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = cachedApiKeys.map(k => {
+          const isActive = k.active === 1 || k.active === true;
+          const revokeTarget = k.id !== undefined && k.id !== null ? String(k.id) : String(k.key || '');
+          const maskedDisplay = k.maskedKey || k.masked_key || k.key || k.prefix || 'csk_***';
+          return `
+            <tr style="${isActive ? '' : 'opacity:0.5;'}">
+              <td><strong>${escapeHtml(k.label || 'Unnamed Key')}</strong></td>
+              <td><code>${escapeHtml(maskedDisplay)}</code></td>
+              <td>${escapeHtml(String(k.created_at || '').slice(0, 19).replace('T', ' ') || '—')}</td>
+              <td>${escapeHtml(k.last_used_at ? String(k.last_used_at).slice(0, 19).replace('T', ' ') : 'Never')}</td>
+              <td>${isActive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Revoked</span>'}</td>
+              <td>${isActive ? `<button type="button" class="btn btn-red btn-sm" data-action="revoke-api-key" data-key-id="${escapeHtml(revokeTarget)}">Revoke</button>` : '—'}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Error loading API keys')}</td></tr>`;
+      }
+    }
+
+    async function generateApiKey() {
+      const input = document.getElementById('apiKeyLabelInput');
+      const btn = document.getElementById('btnGenerateApiKey');
+      const revealBox = document.getElementById('apiKeySecretReveal');
+      const label = input.value.trim();
+      if (!label) {
+        showToast('❌ Please enter a label for the API key');
+        input.focus();
+        return;
+      }
+      btn.disabled = true;
+      btn.innerText = '⏳ Generating...';
+      try {
+        const { res, data } = await fetchJson('/api/admin/api-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label }),
+        });
+        if (res.status === 401) return checkAdminSession();
+        const rawKey = data?.key || data?.apiKey || data?.rawKey || '';
+        if (!res.ok || !rawKey) {
+          showToast('❌ ' + (data?.error || 'Failed to generate API key'));
+          return;
+        }
+        lastGeneratedApiKey = rawKey;
+        input.value = '';
+        revealBox.style.display = 'block';
+        revealBox.innerHTML = `
+          <div style="font-weight:700; color:#4ade80; margin-bottom:6px;">⚠️ Copy this API key now — the raw secret will only be shown once!</div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <code style="font-size:12.5px; word-break:break-all;">${escapeHtml(rawKey)}</code>
+            <button type="button" class="btn btn-sm btn-sec" data-action="copy-api-key">📋 Copy</button>
+            <button type="button" class="btn btn-sm btn-sec" data-action="hide-api-key">Dismiss</button>
+          </div>
+        `;
+        showToast('✅ New API key generated');
+        await loadApiKeys();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to generate API key'));
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🔐 Generate API Key';
+      }
+    }
+
+    async function revokeApiKey(keyId, btnEl) {
+      if (!keyId) return;
+      if (btnEl) btnEl.disabled = true;
+      try {
+        const { res, data } = await fetchJson(`/api/admin/api-keys/${encodeURIComponent(keyId)}`, {
+          method: 'DELETE',
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          showToast('❌ ' + (data?.error || 'Failed to revoke API key'));
+          return;
+        }
+        showToast('API key revoked');
+        await loadApiKeys();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to revoke API key'));
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    // ── System Diagnostics & Dependencies ────────────────────────────────
+    async function loadSystemDiagnostics() {
+      const btn = document.getElementById('btnRefreshDiagnostics');
+      const binGrid = document.getElementById('diagnosticsBinariesGrid');
+      const countsRow = document.getElementById('diagnosticsCountsRow');
+      const metaRow = document.getElementById('diagnosticsMetaRow');
+      if (btn) { btn.disabled = true; btn.innerText = '⏳ Checking...'; }
+      try {
+        const { res, data } = await fetchJson('/api/system/diagnostics');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data) {
+          binGrid.innerHTML = `<span class="badge badge-red">${escapeHtml(data?.error || 'Diagnostics unavailable')}</span>`;
+          return;
+        }
+        const binaries = data.binaries || {};
+        const binEntries = [
+          { key: 'ffmpeg', label: 'ffmpeg', val: binaries.ffmpeg },
+          { key: 'ffprobe', label: 'ffprobe', val: binaries.ffprobe },
+          { key: 'ytdlp', label: 'yt-dlp', val: binaries.ytdlp ?? binaries['yt-dlp'] },
+          { key: 'streamlink', label: 'streamlink', val: binaries.streamlink },
+          { key: 'python', label: 'python', val: binaries.python },
+          { key: 'opencv', label: 'opencv', val: binaries.opencv },
+        ];
+        binGrid.innerHTML = binEntries.map(({ label, val }) => {
+          const ok = typeof val === 'boolean'
+            ? val
+            : Boolean(val?.available ?? val?.ok ?? val?.installed ?? val?.found);
+          const versionStr = typeof val === 'object' && val !== null && val.version ? ` (${String(val.version).slice(0, 28)})` : '';
+          const titleAttr = typeof val === 'object' && val !== null ? (val.path || val.error || '') : '';
+          const cls = ok ? 'badge-ok' : 'badge-red';
+          const icon = ok ? '✅' : '❌';
+          return `<span class="badge ${cls}" title="${escapeHtml(titleAttr)}">${icon} ${escapeHtml(label)}${escapeHtml(versionStr)}</span>`;
+        }).join('');
+
+        const counts = data.counts || {};
+        const countItems = [
+          { label: 'Clips', value: counts.clips ?? 0 },
+          { label: 'Presets', value: counts.clip_presets ?? counts.presets ?? 0 },
+          { label: 'Scheduled Jobs', value: counts.scheduled_jobs ?? counts.scheduledJobs ?? 0 },
+          { label: 'Outbound Webhooks', value: counts.outbound_webhooks ?? counts.outboundWebhooks ?? 0 },
+        ];
+        countsRow.innerHTML = countItems.map(item =>
+          `<span class="badge badge-muted"><strong>${escapeHtml(item.label)}:</strong>&nbsp;${Number(item.value)}</span>`
+        ).join('');
+
+        const storage = data.storage || {};
+        const security = data.security || {};
+        const metaParts = [];
+        if (storage.mediaRoot) metaParts.push(`Storage: ${storage.mediaRoot} (${storage.isSingleDisk ? 'Single-Disk' : 'Multi-Disk'})`);
+        if (typeof storage.freeBytes === 'number') metaParts.push(`Free: ${(storage.freeBytes / 1e9).toFixed(2)} GB`);
+        if (security.requireApiKey !== undefined) metaParts.push(`Require API Key: ${security.requireApiKey ? 'Yes' : 'No'}`);
+        metaRow.innerText = metaParts.join(' • ') || 'Diagnostics ready.';
+      } catch (err) {
+        binGrid.innerHTML = `<span class="badge badge-red">${escapeHtml(err instanceof Error ? err.message : 'Diagnostics failed')}</span>`;
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = '🔄 Refresh Diagnostics'; }
+      }
+    }
+
+    // ── Security Self-Audit ──────────────────────────────────────────────
+    async function loadSecurityScan() {
+      const btn = document.getElementById('btnRefreshSecurityScan');
+      const scoreBadge = document.getElementById('securityScanScoreBadge');
+      const summaryEl = document.getElementById('securityScanSummary');
+      const tbody = document.getElementById('securityScanChecksBody');
+      if (btn) { btn.disabled = true; btn.innerText = '⏳ Scanning...'; }
+      try {
+        const { res, data } = await fetchJson('/api/admin/security-scan');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data) {
+          scoreBadge.innerText = 'Error';
+          scoreBadge.className = 'badge badge-red';
+          summaryEl.innerText = data?.error || 'Security scan unavailable.';
+          tbody.innerHTML = `<tr><td colspan="3" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to run security scan')}</td></tr>`;
+          return;
+        }
+        const score = Number(data.score ?? data.securityScore ?? 0);
+        const rounded = Math.max(0, Math.min(100, Math.round(score)));
+        scoreBadge.innerText = `${rounded}/100`;
+        scoreBadge.className = rounded >= 80 ? 'badge badge-ok' : (rounded >= 50 ? 'badge badge-warn' : 'badge badge-red');
+
+        const checks = Array.isArray(data.checks) ? data.checks : [];
+        let passCount = 0;
+        let warnCount = 0;
+        let failCount = 0;
+
+        if (!checks.length) {
+          tbody.innerHTML = '<tr><td colspan="3" style="color:var(--muted);">No security checks returned.</td></tr>';
+        } else {
+          tbody.innerHTML = checks.map(c => {
+            const rawStatus = String(
+              c.status ?? c.level ?? (c.ok === true || c.passed === true ? 'pass' : (c.ok === false || c.passed === false ? 'fail' : 'warn'))
+            ).toLowerCase();
+            let badgeHtml = '<span class="badge badge-warn">WARN</span>';
+            if (rawStatus === 'pass' || rawStatus === 'ok' || rawStatus === 'passed') {
+              passCount += 1;
+              badgeHtml = '<span class="badge badge-ok">PASS</span>';
+            } else if (rawStatus === 'fail' || rawStatus === 'error' || rawStatus === 'failed') {
+              failCount += 1;
+              badgeHtml = '<span class="badge badge-red">FAIL</span>';
+            } else {
+              warnCount += 1;
+            }
+            const name = c.name || c.title || c.label || c.id || c.check || 'Security Check';
+            const details = c.message || c.detail || c.details || c.description || c.remediation || '—';
+            return `
+              <tr>
+                <td>${badgeHtml}</td>
+                <td><strong>${escapeHtml(name)}</strong></td>
+                <td style="color:var(--muted);">${escapeHtml(details)}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        summaryEl.innerText = data.summary || data.statusSummary || data.status
+          || `${passCount} passed • ${warnCount} warning(s) • ${failCount} failed`;
+      } catch (err) {
+        scoreBadge.innerText = 'Error';
+        scoreBadge.className = 'badge badge-red';
+        const msg = err instanceof Error ? err.message : 'Security scan failed';
+        summaryEl.innerText = msg;
+        tbody.innerHTML = `<tr><td colspan="3" style="color:#fca5a5;">${escapeHtml(msg)}</td></tr>`;
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = '🛡️ Run Security Scan'; }
+      }
+    }
+
+    // ── Stream Health Monitor ────────────────────────────────────────────
+    function formatSnapshotTimestamp(ts) {
+      if (ts === null || ts === undefined || ts === '') return '—';
+      if (typeof ts === 'number' || /^\d+(\.\d+)?$/.test(String(ts).trim())) {
+        const n = Number(ts);
+        const ms = n < 1e12 ? n * 1000 : n;
+        const d = new Date(ms);
+        return Number.isNaN(d.getTime()) ? String(ts) : d.toISOString().slice(0, 19).replace('T', ' ');
+      }
+      return String(ts).slice(0, 19).replace('T', ' ');
+    }
+
+    async function loadStreamHealthSessions(preferredSessionId = '') {
+      const sel = document.getElementById('healthSessionSelect');
+      const btn = document.getElementById('btnRefreshStreamHealth');
+      if (btn) btn.disabled = true;
+      try {
+        const { res, data } = await fetchJson('/api/studio/snapshots/sessions');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          sel.innerHTML = '<option value="">Unavailable</option>';
+          document.getElementById('streamHealthSnapshotsBody').innerHTML =
+            `<tr><td colspan="4" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to load sessions')}</td></tr>`;
+          return;
+        }
+        const rawSessions = Array.isArray(data?.sessions) ? data.sessions : (Array.isArray(data) ? data : []);
+        const sessions = rawSessions.map(item => {
+          if (typeof item === 'string') return { id: item, label: item, ts: 0 };
+          const sid = String(item?.session_id || item?.sessionId || item?.id || '').trim();
+          const cnt = item?.snapshot_count ?? item?.count ?? item?.snapshots;
+          const tsVal = Number(item?.last_recorded_at ?? item?.latest_at ?? item?.recorded_at ?? 0) || 0;
+          const label = cnt !== undefined ? `${sid} (${cnt} pts)` : sid;
+          return { id: sid, label, ts: tsVal };
+        }).filter(s => s.id);
+
+        if (!sessions.length) {
+          sel.innerHTML = '<option value="">No sessions recorded</option>';
+          document.getElementById('streamHealthScoreBadge').innerText = 'Score: —/100';
+          document.getElementById('streamHealthScoreBadge').className = 'badge badge-muted';
+          document.getElementById('streamHealthTrendBadge').innerText = 'Trend: —';
+          document.getElementById('streamHealthTrendBadge').className = 'badge badge-muted';
+          document.getElementById('streamHealthMetaRow').innerText = 'No stream health snapshots recorded yet.';
+          document.getElementById('streamHealthSnapshotsBody').innerHTML =
+            '<tr><td colspan="4" style="color:var(--muted);">No snapshot sessions recorded yet.</td></tr>';
+          return;
+        }
+
+        // Order latest first if timestamps are present
+        if (sessions.some(s => s.ts > 0)) {
+          sessions.sort((a, b) => b.ts - a.ts);
+        }
+
+        sel.innerHTML = sessions.map(s =>
+          `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`
+        ).join('');
+
+        const targetId = (preferredSessionId && sessions.some(s => s.id === preferredSessionId))
+          ? preferredSessionId
+          : sessions[0].id;
+        sel.value = targetId;
+        await loadStreamHealthDetail(targetId);
+      } catch (err) {
+        document.getElementById('streamHealthSnapshotsBody').innerHTML =
+          `<tr><td colspan="4" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Failed to load stream sessions')}</td></tr>`;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function loadStreamHealthDetail(sessionId) {
+      const scoreBadge = document.getElementById('streamHealthScoreBadge');
+      const trendBadge = document.getElementById('streamHealthTrendBadge');
+      const metaRow = document.getElementById('streamHealthMetaRow');
+      const tbody = document.getElementById('streamHealthSnapshotsBody');
+      if (!sessionId) return;
+
+      try {
+        const { res, data } = await fetchJson(`/api/studio/snapshots/${encodeURIComponent(sessionId)}`);
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data) {
+          tbody.innerHTML = `<tr><td colspan="4" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to load stream health')}</td></tr>`;
+          return;
+        }
+        const health = data.health || data;
+        const snapshots = Array.isArray(data.snapshots) ? data.snapshots : (Array.isArray(data) ? data : []);
+        const score = Math.max(0, Math.min(100, Math.round(Number(health.score ?? 0))));
+        const trend = String(health.trend ?? 'stable').toLowerCase();
+        const avgVelocity = Number(health.avgVelocity ?? health.avg_velocity ?? 0);
+        const peakVelocity = Number(health.peakVelocity ?? health.peak_velocity ?? 0);
+
+        scoreBadge.innerText = `Score: ${score}/100`;
+        scoreBadge.className = score >= 70 ? 'badge badge-ok' : (score >= 40 ? 'badge badge-warn' : 'badge badge-red');
+
+        if (trend === 'rising') {
+          trendBadge.innerText = 'Trend: rising ↑';
+          trendBadge.className = 'badge badge-ok';
+        } else if (trend === 'falling') {
+          trendBadge.innerText = 'Trend: falling ↓';
+          trendBadge.className = 'badge badge-red';
+        } else {
+          trendBadge.innerText = 'Trend: stable →';
+          trendBadge.className = 'badge badge-muted';
+        }
+
+        metaRow.innerHTML = `
+          <span><strong>Session:</strong> <code>${escapeHtml(sessionId)}</code></span>
+          <span><strong>Avg Velocity:</strong> ${avgVelocity.toFixed(2)} msg/s</span>
+          <span><strong>Peak Velocity:</strong> ${peakVelocity.toFixed(2)} msg/s</span>
+          <span><strong>Snapshots:</strong> ${snapshots.length}</span>
+        `;
+
+        if (!snapshots.length) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);">No snapshots in this session.</td></tr>';
+          return;
+        }
+
+        const recent = snapshots.slice(-30).reverse();
+        tbody.innerHTML = recent.map(s => {
+          const timeStr = formatSnapshotTimestamp(s.recorded_at ?? s.recordedAt ?? s.created_at);
+          const vel = Number(s.velocity ?? 0).toFixed(2);
+          const peakDbVal = s.peak_db ?? s.peakDb;
+          const peakDbStr = peakDbVal !== null && peakDbVal !== undefined && peakDbVal !== ''
+            ? `${Number(peakDbVal).toFixed(1)} dB`
+            : '—';
+          const clips = Number(s.clip_count ?? s.clipCount ?? 0);
+          return `
+            <tr>
+              <td>${escapeHtml(timeStr)}</td>
+              <td>${escapeHtml(vel)} msg/s</td>
+              <td>${escapeHtml(peakDbStr)}</td>
+              <td>${clips}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Failed to load stream health')}</td></tr>`;
+      }
+    }
+
+    async function pruneStreamSnapshots() {
+      if (!confirm('Prune all stream snapshots older than 30 days?')) return;
+      const btn = document.getElementById('btnPruneSnapshots');
+      if (btn) { btn.disabled = true; btn.innerText = '⏳ Pruning...'; }
+      try {
+        const { res, data } = await fetchJson('/api/studio/snapshots?keepDays=30', { method: 'DELETE' });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          showToast('❌ ' + (data?.error || 'Failed to prune snapshots'));
+          return;
+        }
+        const pruned = Number(data?.deleted ?? data?.pruned ?? 0);
+        showToast(`🧹 Pruned ${pruned} snapshot(s) older than 30 days`);
+        await loadStreamHealthSessions(document.getElementById('healthSessionSelect')?.value || '');
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to prune snapshots'));
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = '🧹 Prune (>30d)'; }
+      }
+    }
+
+    // ── Upload Queue Platform Stats ──────────────────────────────────────
+    async function loadAdminUploadStats() {
+      const tbody = document.getElementById('adminUploadStatsBody');
+      const btn = document.getElementById('btnRefreshAdminUploadStats');
+      if (btn) btn.disabled = true;
+      try {
+        const { res, data } = await fetchJson('/api/studio/upload-queue');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || !data) {
+          tbody.innerHTML = `<tr><td colspan="5" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to load upload queue stats')}</td></tr>`;
+          return;
+        }
+        const rowsMap = new Map();
+        const ensureRow = (plat) => {
+          const key = String(plat || 'other').trim() || 'other';
+          if (!rowsMap.has(key)) rowsMap.set(key, { platform: key, queued: 0, in_progress: 0, done: 0, failed: 0 });
+          return rowsMap.get(key);
+        };
+
+        const rawStats = data.stats;
+        if (Array.isArray(rawStats)) {
+          for (const st of rawStats) {
+            const r = ensureRow(st.platform);
+            r.queued += Number(st.queued ?? 0);
+            r.in_progress += Number(st.in_progress ?? st.inProgress ?? 0);
+            r.done += Number(st.done ?? 0);
+            r.failed += Number(st.failed ?? 0);
+          }
+        } else if (rawStats && typeof rawStats === 'object') {
+          const nested = rawStats.byPlatform && typeof rawStats.byPlatform === 'object' ? rawStats.byPlatform : rawStats;
+          const isFlatTotals = ['queued', 'in_progress', 'inProgress', 'done', 'failed', 'total']
+            .some(k => typeof nested[k] === 'number');
+          if (!isFlatTotals) {
+            for (const [plat, counts] of Object.entries(nested)) {
+              if (!counts || typeof counts !== 'object') continue;
+              const r = ensureRow(plat);
+              r.queued += Number(counts.queued ?? 0);
+              r.in_progress += Number(counts.in_progress ?? counts.inProgress ?? 0);
+              r.done += Number(counts.done ?? 0);
+              r.failed += Number(counts.failed ?? 0);
+            }
+          }
+        }
+
+        if (rowsMap.size === 0) {
+          const items = Array.isArray(data.items) ? data.items : (Array.isArray(data.queue) ? data.queue : []);
+          for (const item of items) {
+            const r = ensureRow(item.platform);
+            const st = String(item.status || 'queued').toLowerCase();
+            if (st === 'in_progress') r.in_progress += 1;
+            else if (st === 'done') r.done += 1;
+            else if (st === 'failed') r.failed += 1;
+            else r.queued += 1;
+          }
+        }
+
+        const PLATFORM_LABELS = {
+          youtube: 'YouTube',
+          tiktok: 'TikTok',
+          instagram: 'Instagram',
+          twitter: 'Twitter',
+          twitch_clips: 'Twitch Clips',
+        };
+        const formatPlat = (raw) => PLATFORM_LABELS[String(raw || '').toLowerCase()] || String(raw || 'Other');
+
+        const rows = Array.from(rowsMap.values());
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No upload queue jobs scheduled yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td><strong>${escapeHtml(formatPlat(r.platform))}</strong></td>
+            <td><span class="badge badge-muted">${Number(r.queued)}</span></td>
+            <td><span class="badge badge-warn">${Number(r.in_progress)}</span></td>
+            <td><span class="badge badge-ok">${Number(r.done)}</span></td>
+            <td><span class="badge badge-red">${Number(r.failed)}</span></td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Failed to load upload queue stats')}</td></tr>`;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // ── Outbound Signed Webhooks ──────────────────────────────────────────
+    function parseWebhookEvents(rawEvents) {
+      if (Array.isArray(rawEvents)) return rawEvents.map(e => String(e).trim()).filter(Boolean);
+      if (typeof rawEvents === 'string') {
+        const trimmed = rawEvents.trim();
+        if (trimmed.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) return parsed.map(e => String(e).trim()).filter(Boolean);
+          } catch {}
+        }
+        return trimmed.split(',').map(e => e.trim()).filter(Boolean);
+      }
+      return [];
+    }
+
+    async function loadOutboundWebhooks() {
+      const tbody = document.getElementById('outboundWebhooksTableBody');
+      try {
+        const { res, data } = await fetchJson('/api/admin/webhooks');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="7" style="color:#fca5a5;">${escapeHtml(data?.error || 'Failed to load webhooks')}</td></tr>`;
+          return;
+        }
+        cachedWebhooks = Array.isArray(data?.webhooks) ? data.webhooks : (Array.isArray(data) ? data : []);
+        if (!cachedWebhooks.length) {
+          tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No outbound webhooks configured yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = cachedWebhooks.map(w => {
+          const id = escapeHtml(w.id);
+          const isActive = w.enabled === 1 || w.enabled === true || w.active === 1 || w.active === true;
+          const eventsList = parseWebhookEvents(w.events);
+          const masked = w.secretPreview || w.maskedSecret || w.masked_secret || w.secret_masked || 'whsec_***';
+          const lastStatus = w.last_status ?? w.lastStatus;
+          const lastError = w.last_error ?? w.lastError;
+          const lastDeliveredAt = w.last_triggered_at ?? w.last_delivered_at ?? w.lastDeliveredAt;
+          let deliveryHtml = '<span style="color:var(--muted);">Never tested</span>';
+          if (lastError) {
+            deliveryHtml = `<span class="badge badge-red">Err</span> <span style="color:#fca5a5; font-size:11.5px;">${escapeHtml(String(lastError).slice(0, 80))}</span>`;
+            if (lastDeliveredAt) {
+              deliveryHtml += ` <span style="color:var(--muted); font-size:11px;">${escapeHtml(String(lastDeliveredAt).slice(0, 19).replace('T', ' '))}</span>`;
+            }
+          } else if (lastStatus !== undefined && lastStatus !== null && lastStatus !== '') {
+            const codeNum = Number(lastStatus);
+            const okCls = codeNum >= 200 && codeNum < 300 ? 'badge-ok' : 'badge-warn';
+            deliveryHtml = `<span class="badge ${okCls}">HTTP ${escapeHtml(lastStatus)}</span>`;
+            if (lastDeliveredAt) {
+              deliveryHtml += ` <span style="color:var(--muted); font-size:11px;">${escapeHtml(String(lastDeliveredAt).slice(0, 19).replace('T', ' '))}</span>`;
+            }
+          } else if (lastDeliveredAt) {
+            deliveryHtml = `<span style="color:var(--muted); font-size:11.5px;">${escapeHtml(String(lastDeliveredAt).slice(0, 19).replace('T', ' '))}</span>`;
+          }
+          return `
+            <tr style="${isActive ? '' : 'opacity:0.65;'}">
+              <td><strong>${escapeHtml(w.name || 'Webhook')}</strong></td>
+              <td><code>${escapeHtml(masked)}</code></td>
+              <td style="max-width:240px; word-break:break-all;"><code>${escapeHtml(w.url || '')}</code></td>
+              <td>${eventsList.length ? eventsList.map(ev => `<span class="badge badge-muted" style="margin:2px;">${escapeHtml(ev)}</span>`).join('') : '—'}</td>
+              <td>${isActive ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-muted">Paused</span>'}</td>
+              <td>${deliveryHtml}</td>
+              <td>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button type="button" class="btn btn-sec btn-sm" data-action="toggle-webhook" data-webhook-id="${id}">${isActive ? 'Pause' : 'Enable'}</button>
+                  <button type="button" class="btn btn-sec btn-sm" data-action="test-webhook" data-webhook-id="${id}">⚡ Test</button>
+                  <button type="button" class="btn btn-red btn-sm" data-action="delete-webhook" data-webhook-id="${id}">Delete</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Error loading webhooks')}</td></tr>`;
+      }
+    }
+
+    async function createOutboundWebhook() {
+      const nameInput = document.getElementById('webhookNameInput');
+      const urlInput = document.getElementById('webhookUrlInput');
+      const errBox = document.getElementById('webhookCreateError');
+      const revealBox = document.getElementById('webhookSecretReveal');
+      const btn = document.getElementById('btnCreateWebhook');
+      errBox.style.display = 'none';
+      errBox.innerText = '';
+
+      const name = nameInput.value.trim();
+      const url = urlInput.value.trim();
+      const events = Array.from(document.querySelectorAll('.outbound-webhook-event:checked')).map(cb => cb.value);
+
+      if (!name) {
+        errBox.innerText = '❌ Please enter a webhook name.';
+        errBox.style.display = 'block';
+        nameInput.focus();
+        return;
+      }
+      if (!/^https:\/\//i.test(url)) {
+        errBox.innerText = '❌ Outbound webhook URL must start with https://';
+        errBox.style.display = 'block';
+        urlInput.focus();
+        return;
+      }
+      if (!events.length) {
+        errBox.innerText = '❌ Select at least one subscribed event.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Creating...';
+      try {
+        const { res, data } = await fetchJson('/api/admin/webhooks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, url, events }),
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          const msg = data?.error || 'Failed to create outbound webhook';
+          errBox.innerText = '❌ ' + msg;
+          errBox.style.display = 'block';
+          showToast('❌ ' + msg);
+          return;
+        }
+        nameInput.value = '';
+        urlInput.value = '';
+        const rawSecret = data?.secret || '';
+        if (rawSecret) {
+          lastGeneratedWebhookSecret = rawSecret;
+          revealBox.style.display = 'block';
+          revealBox.innerHTML = `
+            <div style="font-weight:700; color:#4ade80; margin-bottom:6px;">⚠️ Copy this HMAC signing secret now — it will only be displayed once!</div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <code style="font-size:12.5px; word-break:break-all;">${escapeHtml(rawSecret)}</code>
+              <button type="button" class="btn btn-sm btn-sec" data-action="copy-webhook-secret">📋 Copy</button>
+              <button type="button" class="btn btn-sm btn-sec" data-action="hide-webhook-secret">Dismiss</button>
+            </div>
+          `;
+        }
+        showToast('✅ Outbound webhook created!');
+        await Promise.all([loadOutboundWebhooks(), loadSystemDiagnostics()]);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to create webhook';
+        errBox.innerText = '❌ ' + msg;
+        errBox.style.display = 'block';
+        showToast('❌ ' + msg);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🪝 Add Webhook';
+      }
+    }
+
+    async function toggleOutboundWebhook(webhookId, btnEl) {
+      if (!webhookId) return;
+      if (btnEl) btnEl.disabled = true;
+      try {
+        const { res, data } = await fetchJson(`/api/admin/webhooks/${encodeURIComponent(webhookId)}/toggle`, {
+          method: 'POST',
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          showToast('❌ ' + (data?.error || 'Failed to toggle webhook'));
+          return;
+        }
+        const active = data?.webhook?.enabled === 1 || data?.webhook?.enabled === true || data?.webhook?.active === 1 || data?.webhook?.active === true;
+        showToast(active ? '✅ Webhook enabled' : '⏸️ Webhook paused');
+        await loadOutboundWebhooks();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to toggle webhook'));
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    async function testOutboundWebhook(webhookId, btnEl) {
+      if (!webhookId) return;
+      if (btnEl) { btnEl.disabled = true; btnEl.innerText = '⏳...'; }
+      try {
+        const { res, data } = await fetchJson(`/api/admin/webhooks/${encodeURIComponent(webhookId)}/test`, {
+          method: 'POST',
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok || data?.ok === false) {
+          showToast(`❌ Ping failed${data?.status ? ` (HTTP ${data.status})` : ''}: ${data?.error || 'Delivery error'}`);
+        } else {
+          showToast(`✅ Test ping succeeded${data?.status ? ` (HTTP ${data.status})` : ''}`);
+        }
+        await loadOutboundWebhooks();
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Test ping failed'));
+      } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.innerText = '⚡ Test'; }
+      }
+    }
+
+    async function deleteOutboundWebhook(webhookId, btnEl) {
+      if (!webhookId) return;
+      if (!confirm('Delete this outbound webhook permanently?')) return;
+      if (btnEl) btnEl.disabled = true;
+      try {
+        const { res, data } = await fetchJson(`/api/admin/webhooks/${encodeURIComponent(webhookId)}`, {
+          method: 'DELETE',
+        });
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          showToast('❌ ' + (data?.error || 'Failed to delete webhook'));
+          return;
+        }
+        showToast('🗑️ Outbound webhook deleted');
+        await Promise.all([loadOutboundWebhooks(), loadSystemDiagnostics()]);
+      } catch (err) {
+        showToast('❌ ' + (err instanceof Error ? err.message : 'Failed to delete webhook'));
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    // ── Kelviq Event Log & JSON Preview ───────────────────────────────────
+    async function loadEventLog() {
+      const btn = document.getElementById('btnRefreshEventLog');
+      if (btn) btn.disabled = true;
+      try {
+        const { res, data } = await fetchJson('/api/admin/event-log?limit=50');
+        if (res.status === 401) return checkAdminSession();
+        if (res.ok && data) {
+          const events = Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []);
+          document.getElementById('admEventsCount').innerText = events.length;
+          renderEvents(events);
+        }
+      } catch {
+        // Keep existing overview events if endpoint temporarily fails
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function renderEvents(events) {
+      cachedEvents = Array.isArray(events) ? events : [];
+      const tbody = document.getElementById('kelviqEventsBody');
+      if (!cachedEvents.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: var(--muted);">No Kelviq webhook or activation events yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = cachedEvents.map((e, idx) => {
+        let parsedJson = e.raw_json;
+        if (typeof parsedJson === 'string') {
+          try { parsedJson = JSON.parse(parsedJson); } catch {}
+        }
+        const maskedJson = maskSensitiveJson(parsedJson ?? {});
+        const formattedJson = typeof maskedJson === 'string' ? maskedJson : JSON.stringify(maskedJson, null, 2);
+        return `
+          <tr>
+            <td>${escapeHtml(String(e.received_at || '').slice(0, 19).replace('T', ' '))}</td>
+            <td><span class="badge">${escapeHtml(e.event_type)}</span></td>
+            <td>${escapeHtml(e.customer_email || '—')}</td>
+            <td><strong>${escapeHtml(e.plan_identifier || '—')}</strong></td>
+            <td><code>${escapeHtml(e.license_key || '—')}</code></td>
+            <td>${escapeHtml(e.amount || '—')}</td>
+            <td><button type="button" class="btn btn-sec btn-sm" data-action="toggle-event-json" data-event-idx="${idx}">🔍 View JSON</button></td>
+          </tr>
+          <tr id="eventJsonRow_${idx}" style="display: none;">
+            <td colspan="7">
+              <pre class="json-preview-box">${escapeHtml(formattedJson)}</pre>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ── Security & Admin Audit Log ────────────────────────────────────────
+    async function loadAuditLog() {
+      const tbody = document.getElementById('auditLogTableBody');
+      const btn = document.getElementById('btnRefreshAuditLog');
+      if (btn) btn.disabled = true;
+      try {
+        const { res, data } = await fetchJson('/api/admin/audit-log?limit=50');
+        if (res.status === 401) return checkAdminSession();
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="5" style="color: var(--muted);">${escapeHtml(data?.error || 'Audit log unavailable.')}</td></tr>`;
+          return;
+        }
+        const logs = Array.isArray(data?.logs)
+          ? data.logs
+          : (Array.isArray(data?.entries) ? data.entries : (Array.isArray(data) ? data : []));
+        if (!logs.length) {
+          tbody.innerHTML = '<tr><td colspan="5" style="color: var(--muted);">No security or admin audit events recorded yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = logs.map(entry => {
+          const ts = String(entry.created_at || entry.timestamp || entry.time || '').slice(0, 19).replace('T', ' ');
+          const action = entry.action || entry.event || entry.event_type || '—';
+          const actor = entry.actor || entry.ip || entry.source_ip || 'admin';
+          let details = entry.details || entry.target || entry.summary || entry.metadata || '—';
+          if (typeof details === 'object' && details !== null) {
+            details = JSON.stringify(maskSensitiveJson(details));
+          }
+          const status = String(entry.status || entry.outcome || 'OK').toUpperCase();
+          const statusCls = status.includes('FAIL') || status.includes('DENY') || status.includes('ERR')
+            ? 'badge-red'
+            : (status.includes('WARN') ? 'badge-warn' : 'badge-ok');
+          return `
+            <tr>
+              <td>${escapeHtml(ts || '—')}</td>
+              <td><code>${escapeHtml(action)}</code></td>
+              <td>${escapeHtml(actor)}</td>
+              <td style="max-width:420px; word-break:break-word;">${escapeHtml(String(details))}</td>
+              <td><span class="badge ${statusCls}">${escapeHtml(status)}</span></td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#fca5a5;">${escapeHtml(err instanceof Error ? err.message : 'Failed to load audit log')}</td></tr>`;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function bindAdminEvents() {
+      document.getElementById('adminPasswordInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') adminLogin();
+      });
+      document.getElementById('btnAdminLogin').addEventListener('click', adminLogin);
+      document.getElementById('btnAdminRefresh').addEventListener('click', loadAdminOverview);
+      document.getElementById('btnAdminLogout').addEventListener('click', adminLogout);
+
+      document.getElementById('btnJumpToPassword').addEventListener('click', () => {
+        const input = document.getElementById('setNewAdminPass');
+        if (input) {
+          input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          input.focus();
+        }
+      });
+
+      document.getElementById('btnAdminCheckUpdate').addEventListener('click', () => loadSystemVersion(true));
+      document.getElementById('adminVersionCard').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action="copy-cmd"][data-cmd]');
+        if (!btn) return;
+        const cmd = btn.getAttribute('data-cmd') || '';
+        const ok = await copyToClipboard(cmd);
+        showToast(ok ? `📋 Copied: ${cmd}` : 'Could not copy command');
+      });
+
+      document.getElementById('plansEditorGrid').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="save-plan"][data-plan-id]');
+        if (!btn) return;
+        const planId = btn.getAttribute('data-plan-id');
+        if (planId) savePlan(planId, btn);
+      });
+
+      document.getElementById('btnTestKelviq').addEventListener('click', testKelviqConnection);
+      document.getElementById('clearWebhookSecretCheckbox').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          document.getElementById('setKelviqWebhookSecret').value = '';
+        }
+      });
+      document.getElementById('setKelviqWebhookSecret').addEventListener('input', (e) => {
+        if (e.target.value.trim()) {
+          document.getElementById('clearWebhookSecretCheckbox').checked = false;
+        }
+      });
+      document.getElementById('btnSaveAdminSettings').addEventListener('click', saveAdminSettings);
+
+      document.getElementById('btnGenerateVipKey').addEventListener('click', generateVipKey);
+      document.getElementById('generatedKeyResult').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action="copy-generated-key"]');
+        if (!btn || !lastGeneratedLicenseKey) return;
+        const ok = await copyToClipboard(lastGeneratedLicenseKey);
+        showToast(ok ? 'Key copied!' : 'Could not copy key');
+      });
+
+      document.getElementById('vipKeysTableBody').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="revoke-key"][data-key-idx]');
+        if (!btn) return;
+        const idx = Number(btn.getAttribute('data-key-idx'));
+        const item = cachedLocalLicenses[idx];
+        if (item?.license_key) revokeKey(item.license_key, btn);
+      });
+
+      // API Keys Manager events
+      document.getElementById('btnGenerateApiKey').addEventListener('click', generateApiKey);
+      document.getElementById('btnRefreshApiKeys').addEventListener('click', loadApiKeys);
+      document.getElementById('apiKeySecretReveal').addEventListener('click', async (e) => {
+        const copyBtn = e.target.closest('button[data-action="copy-api-key"]');
+        if (copyBtn && lastGeneratedApiKey) {
+          const ok = await copyToClipboard(lastGeneratedApiKey);
+          showToast(ok ? '📋 API key copied!' : 'Could not copy API key');
+          return;
+        }
+        const hideBtn = e.target.closest('button[data-action="hide-api-key"]');
+        if (hideBtn) {
+          lastGeneratedApiKey = '';
+          const box = document.getElementById('apiKeySecretReveal');
+          box.style.display = 'none';
+          box.innerHTML = '';
+        }
+      });
+      document.getElementById('apiKeysTableBody').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="revoke-api-key"][data-key-id]');
+        if (!btn) return;
+        const keyId = btn.getAttribute('data-key-id');
+        if (keyId && confirm('Revoke this API key? External tools using it will be rejected.')) {
+          revokeApiKey(keyId, btn);
+        }
+      });
+
+      // Kelviq Events & JSON Preview toggle
+      document.getElementById('btnRefreshEventLog').addEventListener('click', loadEventLog);
+      document.getElementById('kelviqEventsBody').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="toggle-event-json"][data-event-idx]');
+        if (!btn) return;
+        const idx = btn.getAttribute('data-event-idx');
+        const row = document.getElementById(`eventJsonRow_${idx}`);
+        if (!row) return;
+        const isOpen = row.style.display !== 'none';
+        row.style.display = isOpen ? 'none' : 'table-row';
+        btn.innerText = isOpen ? '🔍 View JSON' : '✕ Hide JSON';
+      });
+
+      // Security Scan, Diagnostics, Stream Health, Upload Stats & Outbound Webhooks events
+      document.getElementById('btnRefreshSecurityScan').addEventListener('click', loadSecurityScan);
+      document.getElementById('btnRefreshDiagnostics').addEventListener('click', loadSystemDiagnostics);
+      document.getElementById('healthSessionSelect').addEventListener('change', (e) => {
+        loadStreamHealthDetail(e.target.value);
+      });
+      document.getElementById('btnRefreshStreamHealth').addEventListener('click', () => {
+        loadStreamHealthSessions(document.getElementById('healthSessionSelect')?.value || '');
+      });
+      document.getElementById('btnPruneSnapshots').addEventListener('click', pruneStreamSnapshots);
+      document.getElementById('btnRefreshAdminUploadStats').addEventListener('click', loadAdminUploadStats);
+      document.getElementById('btnCreateWebhook').addEventListener('click', createOutboundWebhook);
+      document.getElementById('btnRefreshWebhooks').addEventListener('click', loadOutboundWebhooks);
+      document.getElementById('webhookSecretReveal').addEventListener('click', async (e) => {
+        const copyBtn = e.target.closest('button[data-action="copy-webhook-secret"]');
+        if (copyBtn && lastGeneratedWebhookSecret) {
+          const ok = await copyToClipboard(lastGeneratedWebhookSecret);
+          showToast(ok ? '📋 Webhook signing secret copied!' : 'Could not copy secret');
+          return;
+        }
+        const hideBtn = e.target.closest('button[data-action="hide-webhook-secret"]');
+        if (hideBtn) {
+          lastGeneratedWebhookSecret = '';
+          const box = document.getElementById('webhookSecretReveal');
+          box.style.display = 'none';
+          box.innerHTML = '';
+        }
+      });
+      document.getElementById('outboundWebhooksTableBody').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action][data-webhook-id]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const webhookId = btn.getAttribute('data-webhook-id');
+        if (!webhookId) return;
+        if (action === 'toggle-webhook') toggleOutboundWebhook(webhookId, btn);
+        else if (action === 'test-webhook') testOutboundWebhook(webhookId, btn);
+        else if (action === 'delete-webhook') deleteOutboundWebhook(webhookId, btn);
+      });
+
+      // Audit log refresh
+      document.getElementById('btnRefreshAuditLog').addEventListener('click', loadAuditLog);
+    }
+
+    bindAdminEvents();
+    checkAdminSession();
+  </script>
+</body>
+</html>
