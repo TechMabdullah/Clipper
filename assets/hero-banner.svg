@@ -128,4 +128,63 @@
     <rect x="0" y="0" width="136" height="34" rx="17" fill="#6C63FF" fill-opacity="0.22" stroke="#6C63FF"/>
     <text x="68" y="21" text-anchor="middle" fill="#D8D6FF">Live &amp; VOD AI</text>
 
-    <rect x="148" y="0" width="150" height="34" rx="17" fill="#FF8A30" fill-opacity="0.22" stroke="#FF8A30
+    <rect x="148" y="0" width="150" height="34" rx="17" fill="#FF8A30" fill-opacity="0.22" stroke="#FF8A30"/>
+    <text x="223" y="21" text-anchor="middle" fill="#FFD8B8">Stripe Billing</text>
+
+    <rect x="310" y="0" width="166" height="34" rx="17" fill="#FF5FA2" fill-opacity="0.22" stroke="#FF5FA2"/>
+    <text x="393" y="21" text-anchor="middle" fill="#FFD4E7">Doodle Auth + OTP</text>
+  </g>
+
+  <!-- Cute Animated Doodle Cast Trio (Right Side) -->
+  <g transform="translate(790, 48)">
+    <!-- Ground ellipse -->
+    <ellipse cx="145" cy="212" rx="115" ry="10" fill="#0B0B17" fill-opacity="0.55"/>
+
+    <!-- Purple Pill Character -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0;0,-8;0,0" dur="2.8s" repeatCount="indefinite"/>
+      <rect x="44" y="24" width="76" height="176" rx="38" fill="#6C63FF"/>
+      <ellipse cx="70" cy="72" rx="9" ry="9" fill="#FFFFFF">
+        <animate attributeName="ry" values="9;9;1.5;9;9" keyTimes="0;0.88;0.92;0.96;1" dur="4.2s" repeatCount="indefinite"/>
+      </ellipse>
+      <ellipse cx="96" cy="72" rx="9" ry="9" fill="#FFFFFF">
+        <animate attributeName="ry" values="9;9;1.5;9;9" keyTimes="0;0.88;0.92;0.96;1" dur="4.2s" repeatCount="indefinite"/>
+      </ellipse>
+      <circle cx="72" cy="72" r="4" fill="#1A1A2E">
+        <animate attributeName="cx" values="69;74;69" dur="3.6s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="98" cy="72" r="4" fill="#1A1A2E">
+        <animate attributeName="cx" values="95;100;95" dur="3.6s" repeatCount="indefinite"/>
+      </circle>
+      <path d="M75 96 Q83 105 91 96" stroke="#1A1A2E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+    </g>
+
+    <!-- Orange Dome Buddy -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0;0,-5;0,0" dur="2.4s" repeatCount="indefinite"/>
+      <path d="M 10 202 C 10 140, 114 140, 114 202 Z" fill="#FF8A30"/>
+      <circle cx="46" cy="172" r="6" fill="#FFFFFF"/>
+      <circle cx="76" cy="172" r="6" fill="#FFFFFF"/>
+      <circle cx="47" cy="172" r="3" fill="#1A1A2E"/>
+      <circle cx="77" cy="172" r="3" fill="#1A1A2E"/>
+      <path d="M54 185 Q61 192 68 185" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round" fill="none"/>
+    </g>
+
+    <!-- Yellow Sunny Companion -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0,0;0,-10;0,0" dur="2.2s" repeatCount="indefinite"/>
+      <circle cx="195" cy="148" r="38" fill="#FFD43B"/>
+      <circle cx="183" cy="142" r="5" fill="#1A1A2E"/>
+      <circle cx="207" cy="142" r="5" fill="#1A1A2E"/>
+      <path d="M187 156 Q195 164 203 156" stroke="#1A1A2E" stroke-width="3" stroke-linecap="round" fill="none"/>
+    </g>
+
+    <!-- Twinkling Rotating Pink Sparkle -->
+    <g transform="translate(168, 56)">
+      <polygon points="0,-16 4,-4 16,0 4,4 0,16 -4,4 -16,0 -4,-4" fill="#FF5FA2">
+        <animateTransform attributeName="transform" type="rotate" values="0;360" dur="6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.6;1;0.6" dur="2s" repeatCount="indefinite"/>
+      </polygon>
+    </g>
+  </g>
+</svg>
