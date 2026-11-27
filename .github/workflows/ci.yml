@@ -27,7 +27,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - run: pnpm install --frozen-lockfile --allow-build esbuild --allow-build nx
+      - run: pnpm install --frozen-lockfile --allow-build esbuild --allow-build nx --allow-build @firebase/util --allow-build @sentry/cli --allow-build protobufjs
 
       - name: Build & Typecheck Monorepo
         env:
